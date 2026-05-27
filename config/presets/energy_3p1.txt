@@ -1,0 +1,12 @@
+include = ../base/3p1.txt
+
+operation = energy_3p1
+baseline_km = 0.574
+energy_min_GeV = 0.5
+energy_max_GeV = 6.0
+energy_step_GeV = 0.02
+
+output_csv_path = data/oscillations/3p1/nd_3p1_probabilities.csv
+
+# Valeurs de masse sterile pour le scan 3+1
+dm41_values_eV2 = 0.1, 1.0, 10.0, 100.0

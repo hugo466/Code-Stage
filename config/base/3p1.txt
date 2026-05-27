@@ -1,0 +1,29 @@
+theta12_deg = 33.44
+theta13_deg = 8.57
+theta23_deg = 49.20
+delta_cp_deg = 230.0
+
+n_sterile = 1
+# theta1s_deg = 1.420686
+# theta2s_deg = 33.265549
+theta1s_deg = 20
+theta2s_deg = 20
+theta3s_deg = 0.0
+delta1s_deg = 0.0
+delta2s_deg = 0.0
+delta3s_deg = 0.0
+
+dm21_eV2 = 7.42e-5
+dm31_eV2 = 2.517e-3
+
+gaussian_filter_enabled = 1
+sigmaE_over_E = 0.05
+
+# Effets de matiere (adaptes DUNE)
+matter_effects_enabled = 0
+matter_density_g_cm3 = 2.848
+matter_electron_fraction = 0.5
+matter_neutron_fraction = 0.5
+matter_include_neutral_current_sterile = 1
+matter_evolution_steps = 600
+matter_a_cc_coeff_eV2_per_GeV_per_gcm3 = 1.52e-4

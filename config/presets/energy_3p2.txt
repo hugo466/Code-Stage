@@ -1,0 +1,13 @@
+include = ../base/3p2.txt
+
+operation = energy_3p2
+baseline_km = 0.574
+baseline_values_km = 0.574, 1300.0
+energy_min_GeV = 0.5
+energy_max_GeV = 6.0
+energy_step_GeV = 0.01
+
+output_csv_3p2_path = data/oscillations/3p2/nd_3p2_probabilities.csv
+
+dm41_3p2_eV2 = 1.0e3
+dm54_values_eV2 = 0.1, 1.0, 10.0, 100.0

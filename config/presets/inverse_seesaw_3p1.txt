@@ -1,0 +1,30 @@
+include = ../base/3p1.txt
+
+operation = inverse_seesaw_3p1
+
+baseline_km = 574
+energy_min_GeV = 0.5
+energy_max_GeV = 8.0
+energy_step_GeV = 0.05
+
+# Matrices du modèle inverse seesaw (section 3+1 du rapport)
+# mD est calcule automatiquement via Casas-Ibarra (3x2)
+inverse_M_2x2_GeV = 1000.0, 0.0, 0.0, 1300.0
+
+# Parametrisation de Casas-Ibarra
+inverse_ci_M_heavy_GeV = 1000.0, 1300.0
+inverse_ci_alpha21_deg = 0.0
+inverse_ci_alpha31_deg = 0.0
+inverse_ci_z_real = 0.35
+inverse_ci_z_imag = 0.0
+inverse_ci_normal_ordering = 1
+
+# Bloc μ dans la base (S_H, S_0), en eV
+inverse_mu_H_2x2_eV = 120.0, 0.0, 0.0, 180.0
+inverse_mu_H0_2x1_eV = 1.0, 1.2
+
+# Scan de μ00 (eV), masse du 4e état léger
+inverse_mu00_values_eV = 0.1, 1.0, 10.0
+
+output_inverse_csv_path = data/inverse_seesaw/3p1/inverse_seesaw_3p1.csv
+output_inverse_md_csv_path = data/inverse_seesaw/3p1/inverse_seesaw_3p1_mD.csv

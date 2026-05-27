@@ -1,0 +1,26 @@
+include = ../base/3p1.txt
+
+operation = energy_3p1
+
+# DUNE-like long baseline
+baseline_km = 0.574
+energy_min_GeV = 0.5
+energy_max_GeV = 6.0
+energy_step_GeV = 0.01
+
+# Matter effects (DUNE-like) enabled explicitly for this preset
+matter_effects_enabled = 1
+matter_density_g_cm3 = 2.848
+matter_electron_fraction = 0.5
+matter_neutron_fraction = 0.5
+matter_include_neutral_current_sterile = 1
+matter_evolution_steps = 150
+matter_a_cc_coeff_eV2_per_GeV_per_gcm3 = 1.52e-4
+
+# Keep detector smearing enabled
+gaussian_filter_enabled = 1
+
+output_csv_path = data/oscillations/3p1/dune_3p1_probabilities_matter.csv
+
+# Sterile mass-splitting scan
+dm41_values_eV2 = 0.1, 1.0, 10.0, 100.0

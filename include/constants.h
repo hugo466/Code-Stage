@@ -1,0 +1,18 @@
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+#define PI 3.14159265358979323846
+#define OSCILLATION_PHASE_FACTOR 1.267 * 2
+
+#define N_FLAVORS_3P1 4
+#define N_FLAVORS_3P2 5
+
+enum FlavorIndex {
+    FLAVOR_E = 0,
+    FLAVOR_MU = 1,
+    FLAVOR_TAU = 2,
+    FLAVOR_STERILE = 3,
+    FLAVOR_STERILE_2 = 4
+};
+
+#endif
