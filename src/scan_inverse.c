@@ -54,13 +54,6 @@ static double uniform_random(double min_value, double max_value) {
     return min_value + (max_value - min_value) * t;
 }
 
-static double uniform_random_log10(double min_value, double max_value) {
-    const double log_min = log10(min_value);
-    const double log_max = log10(max_value);
-    const double t = (double)rand() / (double)RAND_MAX;
-    return pow(10.0, log_min + (log_max - log_min) * t);
-}
-
 static double vector_norm3(const double v[3]) {
     return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
@@ -444,10 +437,10 @@ int run_scan_inverse_construct_23_3p1(const SimulationConfig *cfg) {
 
     int solved_ok = 0;
     for (int sample = 0; sample < cfg->inverse_construct_23_samples; ++sample) {
-        const double m4_min = sqrt(cfg->inverse_construct_23_dm41_min_eV2);
-        const double m4_max = sqrt(cfg->inverse_construct_23_dm41_max_eV2);
-        const double m4 = uniform_random_log10(m4_min, m4_max);
-        const double dm41 = m4 * m4;
+        const double dm41 = uniform_random(
+            cfg->inverse_construct_23_dm41_min_eV2,
+            cfg->inverse_construct_23_dm41_max_eV2);
+        const double m4 = sqrt(dm41);
         const double m2 = sqrt(dm21_target);
         const double m3 = sqrt(dm31_target);
 

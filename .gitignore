@@ -1,3 +1,7 @@
 bin/
 *.exe
 *.o
+
+# Generated datasets (too large for GitHub)
+data/**
+!data/.gitkeep
