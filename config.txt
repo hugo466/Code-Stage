@@ -1,1 +1,1 @@
-include = config/presets/inverse_construct_23_3p1.txt
+include = config/presets/inverse_seesaw/3p1/construct_23.txt

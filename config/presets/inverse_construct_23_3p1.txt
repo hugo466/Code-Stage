@@ -2,9 +2,11 @@ include = ../base/3p1.txt
 
 operation = inverse_construct_23_3p1
 
-output_inverse_construct_23_csv_path = data/inverse_seesaw/3p1/inverse_construct_23_3p1.csv
+inverse_kept_points_dir = data/inverse_seesaw/3p1/inverse_construct_23_kept_points
+inverse_clear_kept_points_dir = 1
+output_inverse_construct_23_csv_path = data/inverse_seesaw/3p1/inverse_construct_23_kept_points/inverse_construct_23_kept_points.csv
 
-inverse_construct_23_samples = 200000
+inverse_construct_23_samples = 100000
 
 # Donnees basses energies cible
 dm21_eV2 = 7.49e-5
@@ -39,20 +41,37 @@ inverse_construct_23_dm41_max_eV2 = 100.0
 
 # Tirage du melange actif-sterile zeta = P c, avec ||c|| = s < 1
 inverse_construct_23_zeta_norm_min = 0.0
-inverse_construct_23_zeta_norm_max = 0.99
+inverse_construct_23_zeta_norm_max = 0.5
 inverse_construct_23_zeta_direction_min_deg = 0.0
 inverse_construct_23_zeta_direction_max_deg = 360.0
 
-# Parametres libres de f in GL(2,R)
-inverse_construct_23_f11_min = -0.02
-inverse_construct_23_f11_max = 0.02
-inverse_construct_23_f12_min = -0.02
-inverse_construct_23_f12_max = 0.02
-inverse_construct_23_f21_min = -0.025
+# Deux phases de Majorana physiques (m1 = 0 dans ce modele)
+inverse_construct_23_alpha21_min_deg = 0.0
+inverse_construct_23_alpha21_max_deg = 360.0
+inverse_construct_23_alpha31_min_deg = 0.0
+inverse_construct_23_alpha31_max_deg = 360.0
+
+# Parametres libres de f in GL(2,C)
+inverse_construct_23_f11_min = 0.0
+inverse_construct_23_f11_max = 0.025
+inverse_construct_23_f11_phase_min_deg = 0.0
+inverse_construct_23_f11_phase_max_deg = 360.0
+inverse_construct_23_f12_min = 0.0
+inverse_construct_23_f12_max = 0.025
+inverse_construct_23_f12_phase_min_deg = 0.0
+inverse_construct_23_f12_phase_max_deg = 360.0
+inverse_construct_23_f21_min = 0.0
 inverse_construct_23_f21_max = 0.025
-inverse_construct_23_f22_min = -0.025
+inverse_construct_23_f21_phase_min_deg = 0.0
+inverse_construct_23_f21_phase_max_deg = 360.0
+inverse_construct_23_f22_min = 0.0
 inverse_construct_23_f22_max = 0.025
+inverse_construct_23_f22_phase_min_deg = 0.0
+inverse_construct_23_f22_phase_max_deg = 360.0
 inverse_construct_23_f_det_min_abs = 1.0e-6
+inverse_construct_23_f_det_max_abs = 5.0e-1
+inverse_construct_23_f_sigma_min_min = 1.5e-2
+inverse_construct_23_kappa_f_max = 1.0e10
 
 # Parametres libres lourds M_R = diag(M1, M2) en GeV
 inverse_construct_23_M1_min_GeV = 174.0

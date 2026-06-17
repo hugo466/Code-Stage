@@ -34,7 +34,7 @@ def load_data(path: Path):
 def main():
     if not DATA_PATH.exists():
         raise FileNotFoundError(
-            "CSV introuvable. Lance d'abord: .\\bin\\app.exe config\\presets\\energy_3p1_dune_matter.txt"
+            "CSV introuvable. Lance d'abord: .\\bin\\app.exe config\\presets\\oscillations\\3p1\\energy_dune_matter.txt"
         )
 
     data = load_data(DATA_PATH)

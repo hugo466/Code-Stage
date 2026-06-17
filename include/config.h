@@ -6,7 +6,6 @@
 #define MAX_DM41_VALUES 5000
 #define MAX_DM54_VALUES 5000
 #define MAX_STERILE_NEUTRINOS 8
-#define MAX_INVERSE_MU_VALUES 1024
 #define MAX_SCAN_VALUES_PER_PARAM 1024
 
 typedef enum {
@@ -18,10 +17,12 @@ typedef enum {
     OPERATION_HEATMAP_DELTA_PMUE_3P2,
     OPERATION_HEATMAP_DELTA_PMUMU_3P2,
     OPERATION_CP_HEATMAP_3P1,
-    OPERATION_INVERSE_SEESAW_3P1,
     OPERATION_INVERSE_PMNS_FILTER_3P1,
     OPERATION_INVERSE_PMNS_FILTER_3P2,
-    OPERATION_INVERSE_CONSTRUCT_23_3P1
+    OPERATION_INVERSE_CONSTRUCT_23_3P1,
+    OPERATION_DUNE_ND_PREDICT_SPECTRUM,
+    OPERATION_DUNE_FD_FIG4_VALIDATION,
+    OPERATION_DUNE_ND_FIG4_SOURCE_LINE
 } SimulationOperation;
 
 typedef struct {
@@ -87,30 +88,48 @@ typedef struct {
     char output_heatmap_3p2_csv_path[256];
     char output_heatmap_pmumu_3p2_csv_path[256];
     char output_cp_heatmap_csv_path[256];
-    char output_inverse_csv_path[256];
-    char output_inverse_md_csv_path[256];
     char output_inverse_pmns_filter_csv_path[256];
     char output_inverse_construct_23_csv_path[256];
     char inverse_kept_points_dir[256];
     int inverse_clear_kept_points_dir;
 
-    /* Inverse seesaw (3+1 léger) */
-    double inverse_mD_3x2_GeV[3][2];
-    double inverse_M_2x2_GeV[2][2];
-    double inverse_mu_H_2x2_eV[2][2];
-    double inverse_mu_H0_2x1_eV[2];
-    double inverse_mu00_eV;
-    double inverse_mu00_values_eV[MAX_INVERSE_MU_VALUES];
-    int inverse_mu00_count;
-
-    /* Parametrisation de Casas-Ibarra (mD 3x2 automatique) */
-    double inverse_ci_m_light_eV[3];
-    double inverse_ci_M_heavy_GeV[2];
-    double inverse_ci_alpha21_deg;
-    double inverse_ci_alpha31_deg;
-    double inverse_ci_z_real;
-    double inverse_ci_z_imag;
-    int inverse_ci_normal_ordering;
+    char dune_theory_index_csv[256];
+    char dune_theory_model[32];
+    char dune_point_source[32];
+    int dune_point_id;
+    char dune_beam_mode[16];
+    char dune_flux_model[32];
+    char dune_flux_format[32];
+    char dune_flux_fhc_file[256];
+    char dune_flux_rhc_file[256];
+    char dune_baseline_model[32];
+    char dune_source_model[32];
+    char dune_dk2nu_flux_z_fhc_file[256];
+    char dune_dk2nu_flux_z_rhc_file[256];
+    int dune_source_debug;
+    double dune_detector_distance_m;
+    double dune_source_z_start_m;
+    double dune_decay_pipe_length_m;
+    int dune_source_z_bins;
+    char dune_osc_engine[32];
+    int dune_matter_enabled;
+    char dune_xsec_model[32];
+    char dune_xsec_format[32];
+    char dune_xsec_cc_file[256];
+    char dune_xsec_nc_file[256];
+    char dune_detectors[64];
+    char dune_ndlar_response_model[32];
+    char dune_ndlar_migration_model[32];
+    char dune_ndlar_category_model[32];
+    char dune_samples_enabled[64];
+    char dune_samples_axis[32];
+    double dune_Erec_min_GeV;
+    double dune_Erec_max_GeV;
+    int dune_Erec_bins;
+    char dune_spectrum_pred_csv[256];
+    char dune_spectrum_null_csv[256];
+    char dune_residuals_csv[256];
+    char dune_point_observables_csv[256];
 
     /* Cibles NuFIT 6.0 2024 pour les angles de melange actifs et delta_CP */
     double inverse_nufit_theta12_deg;
@@ -149,15 +168,30 @@ typedef struct {
     double inverse_construct_23_zeta_norm_max;
     double inverse_construct_23_zeta_direction_min_deg;
     double inverse_construct_23_zeta_direction_max_deg;
+    double inverse_construct_23_alpha21_min_deg;
+    double inverse_construct_23_alpha21_max_deg;
+    double inverse_construct_23_alpha31_min_deg;
+    double inverse_construct_23_alpha31_max_deg;
     double inverse_construct_23_f11_min;
     double inverse_construct_23_f11_max;
+    double inverse_construct_23_f11_phase_min_deg;
+    double inverse_construct_23_f11_phase_max_deg;
     double inverse_construct_23_f12_min;
     double inverse_construct_23_f12_max;
+    double inverse_construct_23_f12_phase_min_deg;
+    double inverse_construct_23_f12_phase_max_deg;
     double inverse_construct_23_f21_min;
     double inverse_construct_23_f21_max;
+    double inverse_construct_23_f21_phase_min_deg;
+    double inverse_construct_23_f21_phase_max_deg;
     double inverse_construct_23_f22_min;
     double inverse_construct_23_f22_max;
+    double inverse_construct_23_f22_phase_min_deg;
+    double inverse_construct_23_f22_phase_max_deg;
     double inverse_construct_23_f_det_min_abs;
+    double inverse_construct_23_f_det_max_abs;
+    double inverse_construct_23_f_sigma_min_min;
+    double inverse_construct_23_kappa_f_max;
     double inverse_construct_23_M1_min_GeV;
     double inverse_construct_23_M1_max_GeV;
     double inverse_construct_23_M2_min_GeV;

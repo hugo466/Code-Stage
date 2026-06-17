@@ -1,0 +1,17 @@
+include = ../../../base/oscillations/3p2.txt
+
+operation = heatmap_delta_pmu_mu_3p2
+
+baseline_km = 0.574
+energy_min_GeV = 0.5
+energy_max_GeV = 6.0
+energy_step_GeV = 0.01
+
+dm41_heatmap_3p2_values_eV2 = 0.1, 1.0, 10.0, 100.0
+dm54_range_enabled = 1
+dm54_range_min_eV2 = 0.1
+dm54_range_max_eV2 = 100.0
+dm54_range_logspace = 1
+dm54_range_points = 1000
+
+output_heatmap_pmumu_3p2_csv_path = data/oscillations/3p2/delta_pmumu_heatmap_3p2.csv

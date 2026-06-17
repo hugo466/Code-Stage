@@ -11,25 +11,27 @@
 static const char *recommended_preset_for_operation(SimulationOperation operation) {
     switch (operation) {
         case OPERATION_ENERGY_3P1:
-            return "config/presets/energy_3p1.txt";
+            return "config/presets/oscillations/3p1/energy.txt";
         case OPERATION_ENERGY_3P2:
-            return "config/presets/energy_3p2.txt";
+            return "config/presets/oscillations/3p2/energy.txt";
         case OPERATION_DISTANCE_3P1:
-            return "config/presets/distance_3p1.txt";
+            return "config/presets/oscillations/3p1/distance.txt";
         case OPERATION_HEATMAP_DELTA_PMUMU_3P2:
-            return "config/presets/heatmap_delta_pmumu_3p2.txt";
+            return "config/presets/oscillations/3p2/heatmap_delta_pmumu.txt";
         case OPERATION_CP_HEATMAP_3P1:
-            return "config/presets/heatmap_cp_3p1.txt";
-        case OPERATION_INVERSE_SEESAW_3P1:
-            return "config/presets/inverse_seesaw_3p1.txt";
+            return "config/presets/oscillations/3p1/heatmap_cp.txt";
         case OPERATION_INVERSE_PMNS_FILTER_3P1:
-            return "config/presets/inverse_pmns_filter_3p1.txt";
+            return "config/presets/inverse_seesaw/3p1/pmns_filter.txt";
         case OPERATION_INVERSE_PMNS_FILTER_3P2:
-            return "config/presets/inverse_pmns_filter_3p2.txt";
+            return "config/presets/inverse_seesaw/3p2/pmns_filter.txt";
         case OPERATION_INVERSE_CONSTRUCT_23_3P1:
-            return "config/presets/inverse_construct_23_3p1.txt";
+            return "config/presets/inverse_seesaw/3p1/construct_23.txt";
+        case OPERATION_DUNE_ND_PREDICT_SPECTRUM:
+        case OPERATION_DUNE_FD_FIG4_VALIDATION:
+        case OPERATION_DUNE_ND_FIG4_SOURCE_LINE:
+            return "config/presets/dune/nd/minimal_onaxis.txt";
         default:
-            return "config/presets/energy_3p1.txt";
+            return "config/presets/oscillations/3p1/energy.txt";
     }
 }
 
@@ -185,10 +187,6 @@ static int parse_operation(const char *value_str, SimulationOperation *out) {
         *out = OPERATION_CP_HEATMAP_3P1;
         return 0;
     }
-    if (strcmp(value_str, "inverse_seesaw_3p1") == 0) {
-        *out = OPERATION_INVERSE_SEESAW_3P1;
-        return 0;
-    }
     if (strcmp(value_str, "inverse_pmns_filter_3p1") == 0) {
         *out = OPERATION_INVERSE_PMNS_FILTER_3P1;
         return 0;
@@ -199,6 +197,19 @@ static int parse_operation(const char *value_str, SimulationOperation *out) {
     }
     if (strcmp(value_str, "inverse_construct_23_3p1") == 0) {
         *out = OPERATION_INVERSE_CONSTRUCT_23_3P1;
+        return 0;
+    }
+    if (strcmp(value_str, "dune_nd_predict_spectrum") == 0) {
+        *out = OPERATION_DUNE_ND_PREDICT_SPECTRUM;
+        return 0;
+    }
+    if (strcmp(value_str, "dune_fd_fig4_validation") == 0) {
+        *out = OPERATION_DUNE_FD_FIG4_VALIDATION;
+        return 0;
+    }
+    if (strcmp(value_str, "dune_nd_fig4_source_line") == 0 ||
+        strcmp(value_str, "dune_nd_fig4_point_source") == 0) {
+        *out = OPERATION_DUNE_ND_FIG4_SOURCE_LINE;
         return 0;
     }
     return 1;
@@ -344,95 +355,6 @@ static int parse_dm41_3p2_value(const char *value_str, SimulationConfig *cfg) {
 
 static int parse_dm41_heatmap_3p2_list(const char *value_str, SimulationConfig *cfg) {
     return parse_double_list(value_str, cfg->dm41_heatmap_3p2_values_eV2, 16, &cfg->dm41_heatmap_3p2_count);
-}
-
-static int parse_inverse_mD_3x2(const char *value_str, SimulationConfig *cfg) {
-    double values[6];
-    int count = 0;
-    if (parse_double_list(value_str, values, 6, &count) != 0 || count != 6) {
-        return 1;
-    }
-
-    int idx = 0;
-    for (int row = 0; row < 3; ++row) {
-        for (int col = 0; col < 2; ++col) {
-            cfg->inverse_mD_3x2_GeV[row][col] = values[idx++];
-        }
-    }
-    return 0;
-}
-
-static int parse_inverse_M_2x2(const char *value_str, SimulationConfig *cfg) {
-    double values[4];
-    int count = 0;
-    if (parse_double_list(value_str, values, 4, &count) != 0 || count != 4) {
-        return 1;
-    }
-
-    int idx = 0;
-    for (int row = 0; row < 2; ++row) {
-        for (int col = 0; col < 2; ++col) {
-            cfg->inverse_M_2x2_GeV[row][col] = values[idx++];
-        }
-    }
-    return 0;
-}
-
-static int parse_inverse_mu_H_2x2(const char *value_str, SimulationConfig *cfg) {
-    double values[4];
-    int count = 0;
-    if (parse_double_list(value_str, values, 4, &count) != 0 || count != 4) {
-        return 1;
-    }
-
-    int idx = 0;
-    for (int row = 0; row < 2; ++row) {
-        for (int col = 0; col < 2; ++col) {
-            cfg->inverse_mu_H_2x2_eV[row][col] = values[idx++];
-        }
-    }
-    return 0;
-}
-
-static int parse_inverse_mu_H0_2x1(const char *value_str, SimulationConfig *cfg) {
-    double values[2];
-    int count = 0;
-    if (parse_double_list(value_str, values, 2, &count) != 0 || count != 2) {
-        return 1;
-    }
-
-    cfg->inverse_mu_H0_2x1_eV[0] = values[0];
-    cfg->inverse_mu_H0_2x1_eV[1] = values[1];
-    return 0;
-}
-
-static int parse_inverse_mu00_values(const char *value_str, SimulationConfig *cfg) {
-    return parse_double_list(value_str, cfg->inverse_mu00_values_eV, MAX_INVERSE_MU_VALUES, &cfg->inverse_mu00_count);
-}
-
-static int parse_inverse_ci_m_light(const char *value_str, SimulationConfig *cfg) {
-    double values[3];
-    int count = 0;
-    if (parse_double_list(value_str, values, 3, &count) != 0 || count != 3) {
-        return 1;
-    }
-
-    for (int i = 0; i < 3; ++i) {
-        cfg->inverse_ci_m_light_eV[i] = values[i];
-    }
-    return 0;
-}
-
-static int parse_inverse_ci_M_heavy(const char *value_str, SimulationConfig *cfg) {
-    double values[2];
-    int count = 0;
-    if (parse_double_list(value_str, values, 2, &count) != 0 || count != 2) {
-        return 1;
-    }
-
-    cfg->inverse_ci_M_heavy_GeV[0] = values[0];
-    cfg->inverse_ci_M_heavy_GeV[1] = values[1];
-    return 0;
 }
 
 static int parse_inverse_pmns_abs_min_3x3(const char *value_str, SimulationConfig *cfg) {
@@ -789,20 +711,6 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "dm41_3p2_eV2") == 0) return parse_dm41_3p2_value(value, cfg);
     if (strcmp(key, "dm41_heatmap_3p2_values_eV2") == 0) return parse_dm41_heatmap_3p2_list(value, cfg);
 
-    if (strcmp(key, "inverse_mD_3x2_GeV") == 0) return parse_inverse_mD_3x2(value, cfg);
-    if (strcmp(key, "inverse_M_2x2_GeV") == 0) return parse_inverse_M_2x2(value, cfg);
-    if (strcmp(key, "inverse_mu_H_2x2_eV") == 0) return parse_inverse_mu_H_2x2(value, cfg);
-    if (strcmp(key, "inverse_mu_H0_2x1_eV") == 0) return parse_inverse_mu_H0_2x1(value, cfg);
-    if (strcmp(key, "inverse_mu00_eV") == 0) return parse_double(value, &cfg->inverse_mu00_eV);
-    if (strcmp(key, "inverse_mu00_values_eV") == 0) return parse_inverse_mu00_values(value, cfg);
-    if (strcmp(key, "inverse_mu_values_eV") == 0) return parse_inverse_mu00_values(value, cfg);
-    if (strcmp(key, "inverse_ci_m_light_eV") == 0) return parse_inverse_ci_m_light(value, cfg);
-    if (strcmp(key, "inverse_ci_M_heavy_GeV") == 0) return parse_inverse_ci_M_heavy(value, cfg);
-    if (strcmp(key, "inverse_ci_alpha21_deg") == 0) return parse_double(value, &cfg->inverse_ci_alpha21_deg);
-    if (strcmp(key, "inverse_ci_alpha31_deg") == 0) return parse_double(value, &cfg->inverse_ci_alpha31_deg);
-    if (strcmp(key, "inverse_ci_z_real") == 0) return parse_double(value, &cfg->inverse_ci_z_real);
-    if (strcmp(key, "inverse_ci_z_imag") == 0) return parse_double(value, &cfg->inverse_ci_z_imag);
-    if (strcmp(key, "inverse_ci_normal_ordering") == 0) return parse_int(value, &cfg->inverse_ci_normal_ordering);
     if (strcmp(key, "inverse_pmns_abs_min_3x3") == 0) return parse_inverse_pmns_abs_min_3x3(value, cfg);
     if (strcmp(key, "inverse_pmns_abs_max_3x3") == 0) return parse_inverse_pmns_abs_max_3x3(value, cfg);
     if (strcmp(key, "inverse_eta_abs_max_3x3") == 0) return parse_inverse_eta_abs_max_3x3(value, cfg);
@@ -813,6 +721,168 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "inverse_eta_dm41_low_max_eV2") == 0) return parse_double(value, &cfg->inverse_eta_dm41_low_max_eV2);
     if (strcmp(key, "inverse_eta_dm41_high_min_eV2") == 0) return parse_double(value, &cfg->inverse_eta_dm41_high_min_eV2);
     if (strcmp(key, "inverse_br_muegamma_max") == 0) return parse_double(value, &cfg->inverse_br_muegamma_max);
+    if (strcmp(key, "dune_theory_index_csv") == 0 ||
+        strcmp(key, "theory.index_csv") == 0 ||
+        strcmp(key, "point_index_csv") == 0 ||
+        strcmp(key, "index_csv") == 0) {
+        strncpy(cfg->dune_theory_index_csv, value, sizeof(cfg->dune_theory_index_csv) - 1);
+        cfg->dune_theory_index_csv[sizeof(cfg->dune_theory_index_csv) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "dune_theory_model") == 0 ||
+        strcmp(key, "theory.model") == 0 ||
+        strcmp(key, "model") == 0) {
+        strncpy(cfg->dune_theory_model, value, sizeof(cfg->dune_theory_model) - 1);
+        cfg->dune_theory_model[sizeof(cfg->dune_theory_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "dune_point_source") == 0 ||
+        strcmp(key, "theory.point_source") == 0 ||
+        strcmp(key, "point_source") == 0) {
+        strncpy(cfg->dune_point_source, value, sizeof(cfg->dune_point_source) - 1);
+        cfg->dune_point_source[sizeof(cfg->dune_point_source) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "dune_point_id") == 0 ||
+        strcmp(key, "theory.point_id") == 0 ||
+        strcmp(key, "point_id") == 0) {
+        return parse_int(value, &cfg->dune_point_id);
+    }
+    if (strcmp(key, "beam.mode") == 0 || strcmp(key, "dune_beam_mode") == 0 || strcmp(key, "beam_mode") == 0) {
+        strncpy(cfg->dune_beam_mode, value, sizeof(cfg->dune_beam_mode) - 1);
+        cfg->dune_beam_mode[sizeof(cfg->dune_beam_mode) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.flux_model") == 0 || strcmp(key, "dune_flux_model") == 0 || strcmp(key, "flux_model") == 0) {
+        strncpy(cfg->dune_flux_model, value, sizeof(cfg->dune_flux_model) - 1);
+        cfg->dune_flux_model[sizeof(cfg->dune_flux_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.flux_format") == 0 || strcmp(key, "dune_flux_format") == 0 || strcmp(key, "flux_format") == 0) {
+        strncpy(cfg->dune_flux_format, value, sizeof(cfg->dune_flux_format) - 1);
+        cfg->dune_flux_format[sizeof(cfg->dune_flux_format) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.flux_fhc_file") == 0 || strcmp(key, "dune_flux_fhc_file") == 0 || strcmp(key, "flux_fhc_file") == 0) {
+        strncpy(cfg->dune_flux_fhc_file, value, sizeof(cfg->dune_flux_fhc_file) - 1);
+        cfg->dune_flux_fhc_file[sizeof(cfg->dune_flux_fhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.flux_rhc_file") == 0 || strcmp(key, "dune_flux_rhc_file") == 0 || strcmp(key, "flux_rhc_file") == 0) {
+        strncpy(cfg->dune_flux_rhc_file, value, sizeof(cfg->dune_flux_rhc_file) - 1);
+        cfg->dune_flux_rhc_file[sizeof(cfg->dune_flux_rhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.baseline_model") == 0 || strcmp(key, "baseline_model") == 0) {
+        strncpy(cfg->dune_baseline_model, value, sizeof(cfg->dune_baseline_model) - 1);
+        cfg->dune_baseline_model[sizeof(cfg->dune_baseline_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.source_model") == 0 || strcmp(key, "source_model") == 0) {
+        strncpy(cfg->dune_source_model, value, sizeof(cfg->dune_source_model) - 1);
+        cfg->dune_source_model[sizeof(cfg->dune_source_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.dk2nu_flux_z_fhc_file") == 0 ||
+        strcmp(key, "beam.source_profile_z_fhc_file") == 0 ||
+        strcmp(key, "dk2nu_flux_z_fhc_file") == 0 ||
+        strcmp(key, "source_profile_z_fhc_file") == 0) {
+        strncpy(cfg->dune_dk2nu_flux_z_fhc_file, value, sizeof(cfg->dune_dk2nu_flux_z_fhc_file) - 1);
+        cfg->dune_dk2nu_flux_z_fhc_file[sizeof(cfg->dune_dk2nu_flux_z_fhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.dk2nu_flux_z_rhc_file") == 0 ||
+        strcmp(key, "beam.source_profile_z_rhc_file") == 0 ||
+        strcmp(key, "dk2nu_flux_z_rhc_file") == 0 ||
+        strcmp(key, "source_profile_z_rhc_file") == 0) {
+        strncpy(cfg->dune_dk2nu_flux_z_rhc_file, value, sizeof(cfg->dune_dk2nu_flux_z_rhc_file) - 1);
+        cfg->dune_dk2nu_flux_z_rhc_file[sizeof(cfg->dune_dk2nu_flux_z_rhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "beam.detector_distance_m") == 0 || strcmp(key, "detector_distance_m") == 0) return parse_double(value, &cfg->dune_detector_distance_m);
+    if (strcmp(key, "beam.source_z_start_m") == 0 || strcmp(key, "source_z_start_m") == 0) return parse_double(value, &cfg->dune_source_z_start_m);
+    if (strcmp(key, "beam.decay_pipe_length_m") == 0 || strcmp(key, "decay_pipe_length_m") == 0) return parse_double(value, &cfg->dune_decay_pipe_length_m);
+    if (strcmp(key, "beam.source_z_bins") == 0 || strcmp(key, "source_z_bins") == 0) return parse_int(value, &cfg->dune_source_z_bins);
+    if (strcmp(key, "beam.source_debug") == 0 || strcmp(key, "source_debug") == 0) return parse_int(value, &cfg->dune_source_debug);
+    if (strcmp(key, "oscillation.engine") == 0 || strcmp(key, "osc_engine") == 0) {
+        strncpy(cfg->dune_osc_engine, value, sizeof(cfg->dune_osc_engine) - 1);
+        cfg->dune_osc_engine[sizeof(cfg->dune_osc_engine) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "oscillation.matter_enabled") == 0 || strcmp(key, "matter_enabled") == 0) return parse_int(value, &cfg->dune_matter_enabled);
+    if (strcmp(key, "interactions.xsec_model") == 0 || strcmp(key, "xsec_model") == 0) {
+        strncpy(cfg->dune_xsec_model, value, sizeof(cfg->dune_xsec_model) - 1);
+        cfg->dune_xsec_model[sizeof(cfg->dune_xsec_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "interactions.xsec_format") == 0 || strcmp(key, "xsec_format") == 0) {
+        strncpy(cfg->dune_xsec_format, value, sizeof(cfg->dune_xsec_format) - 1);
+        cfg->dune_xsec_format[sizeof(cfg->dune_xsec_format) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "interactions.xsec_cc_file") == 0 || strcmp(key, "xsec_cc_file") == 0) {
+        strncpy(cfg->dune_xsec_cc_file, value, sizeof(cfg->dune_xsec_cc_file) - 1);
+        cfg->dune_xsec_cc_file[sizeof(cfg->dune_xsec_cc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "interactions.xsec_nc_file") == 0 || strcmp(key, "xsec_nc_file") == 0) {
+        strncpy(cfg->dune_xsec_nc_file, value, sizeof(cfg->dune_xsec_nc_file) - 1);
+        cfg->dune_xsec_nc_file[sizeof(cfg->dune_xsec_nc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "detector.detectors") == 0 || strcmp(key, "detectors") == 0) {
+        strncpy(cfg->dune_detectors, value, sizeof(cfg->dune_detectors) - 1);
+        cfg->dune_detectors[sizeof(cfg->dune_detectors) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "detector.ndlar.response_model") == 0 || strcmp(key, "response_model") == 0) {
+        strncpy(cfg->dune_ndlar_response_model, value, sizeof(cfg->dune_ndlar_response_model) - 1);
+        cfg->dune_ndlar_response_model[sizeof(cfg->dune_ndlar_response_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "detector.ndlar.migration_model") == 0 || strcmp(key, "migration_model") == 0) {
+        strncpy(cfg->dune_ndlar_migration_model, value, sizeof(cfg->dune_ndlar_migration_model) - 1);
+        cfg->dune_ndlar_migration_model[sizeof(cfg->dune_ndlar_migration_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "detector.ndlar.category_model") == 0 || strcmp(key, "category_model") == 0) {
+        strncpy(cfg->dune_ndlar_category_model, value, sizeof(cfg->dune_ndlar_category_model) - 1);
+        cfg->dune_ndlar_category_model[sizeof(cfg->dune_ndlar_category_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "samples.enabled") == 0 || strcmp(key, "samples_enabled") == 0) {
+        strncpy(cfg->dune_samples_enabled, value, sizeof(cfg->dune_samples_enabled) - 1);
+        cfg->dune_samples_enabled[sizeof(cfg->dune_samples_enabled) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "samples.axis") == 0 || strcmp(key, "samples_axis") == 0) {
+        strncpy(cfg->dune_samples_axis, value, sizeof(cfg->dune_samples_axis) - 1);
+        cfg->dune_samples_axis[sizeof(cfg->dune_samples_axis) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "samples.Erec_min_GeV") == 0 || strcmp(key, "Erec_min_GeV") == 0) return parse_double(value, &cfg->dune_Erec_min_GeV);
+    if (strcmp(key, "samples.Erec_max_GeV") == 0 || strcmp(key, "Erec_max_GeV") == 0) return parse_double(value, &cfg->dune_Erec_max_GeV);
+    if (strcmp(key, "samples.Erec_bins") == 0 || strcmp(key, "Erec_bins") == 0) return parse_int(value, &cfg->dune_Erec_bins);
+    if (strcmp(key, "output.spectrum_pred_csv") == 0 || strcmp(key, "spectrum_pred_csv") == 0) {
+        strncpy(cfg->dune_spectrum_pred_csv, value, sizeof(cfg->dune_spectrum_pred_csv) - 1);
+        cfg->dune_spectrum_pred_csv[sizeof(cfg->dune_spectrum_pred_csv) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "output.spectrum_null_csv") == 0 || strcmp(key, "spectrum_null_csv") == 0) {
+        strncpy(cfg->dune_spectrum_null_csv, value, sizeof(cfg->dune_spectrum_null_csv) - 1);
+        cfg->dune_spectrum_null_csv[sizeof(cfg->dune_spectrum_null_csv) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "output.residuals_csv") == 0 || strcmp(key, "residuals_csv") == 0) {
+        strncpy(cfg->dune_residuals_csv, value, sizeof(cfg->dune_residuals_csv) - 1);
+        cfg->dune_residuals_csv[sizeof(cfg->dune_residuals_csv) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "output.point_observables_csv") == 0 || strcmp(key, "point_observables_csv") == 0) {
+        strncpy(cfg->dune_point_observables_csv, value, sizeof(cfg->dune_point_observables_csv) - 1);
+        cfg->dune_point_observables_csv[sizeof(cfg->dune_point_observables_csv) - 1] = '\0';
+        return 0;
+    }
     if (strcmp(key, "inverse_random_samples") == 0) return parse_int(value, &cfg->inverse_random_samples);
     if (strcmp(key, "inverse_random_seed") == 0) return parse_int(value, &cfg->inverse_random_seed);
     if (strcmp(key, "inverse_random_mu_min_eV") == 0) return parse_double(value, &cfg->inverse_random_mu_min_eV);
@@ -830,19 +900,35 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "inverse_construct_23_zeta_norm_max") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_norm_max);
     if (strcmp(key, "inverse_construct_23_zeta_direction_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_direction_min_deg);
     if (strcmp(key, "inverse_construct_23_zeta_direction_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_direction_max_deg);
+    if (strcmp(key, "inverse_construct_23_alpha21_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_alpha21_min_deg);
+    if (strcmp(key, "inverse_construct_23_alpha21_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_alpha21_max_deg);
+    if (strcmp(key, "inverse_construct_23_alpha31_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_alpha31_min_deg);
+    if (strcmp(key, "inverse_construct_23_alpha31_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_alpha31_max_deg);
     if (strcmp(key, "inverse_construct_23_f11_min") == 0) return parse_double(value, &cfg->inverse_construct_23_f11_min);
     if (strcmp(key, "inverse_construct_23_f11_max") == 0) return parse_double(value, &cfg->inverse_construct_23_f11_max);
+    if (strcmp(key, "inverse_construct_23_f11_phase_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f11_phase_min_deg);
+    if (strcmp(key, "inverse_construct_23_f11_phase_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f11_phase_max_deg);
     if (strcmp(key, "inverse_construct_23_f12_min") == 0) return parse_double(value, &cfg->inverse_construct_23_f12_min);
     if (strcmp(key, "inverse_construct_23_f12_max") == 0) return parse_double(value, &cfg->inverse_construct_23_f12_max);
+    if (strcmp(key, "inverse_construct_23_f12_phase_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f12_phase_min_deg);
+    if (strcmp(key, "inverse_construct_23_f12_phase_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f12_phase_max_deg);
     if (strcmp(key, "inverse_construct_23_f21_min") == 0) return parse_double(value, &cfg->inverse_construct_23_f21_min);
     if (strcmp(key, "inverse_construct_23_f21_max") == 0) return parse_double(value, &cfg->inverse_construct_23_f21_max);
+    if (strcmp(key, "inverse_construct_23_f21_phase_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f21_phase_min_deg);
+    if (strcmp(key, "inverse_construct_23_f21_phase_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f21_phase_max_deg);
     if (strcmp(key, "inverse_construct_23_f22_min") == 0) return parse_double(value, &cfg->inverse_construct_23_f22_min);
     if (strcmp(key, "inverse_construct_23_f22_max") == 0) return parse_double(value, &cfg->inverse_construct_23_f22_max);
+    if (strcmp(key, "inverse_construct_23_f22_phase_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f22_phase_min_deg);
+    if (strcmp(key, "inverse_construct_23_f22_phase_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_f22_phase_max_deg);
     if (strcmp(key, "inverse_construct_23_f_det_min_abs") == 0) return parse_double(value, &cfg->inverse_construct_23_f_det_min_abs);
+    if (strcmp(key, "inverse_construct_23_f_det_max_abs") == 0) return parse_double(value, &cfg->inverse_construct_23_f_det_max_abs);
+    if (strcmp(key, "inverse_construct_23_f_sigma_min_min") == 0) return parse_double(value, &cfg->inverse_construct_23_f_sigma_min_min);
+    if (strcmp(key, "inverse_construct_23_kappa_f_max") == 0) return parse_double(value, &cfg->inverse_construct_23_kappa_f_max);
     if (strcmp(key, "inverse_construct_23_M1_min_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M1_min_GeV);
     if (strcmp(key, "inverse_construct_23_M1_max_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M1_max_GeV);
     if (strcmp(key, "inverse_construct_23_M2_min_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M2_min_GeV);
     if (strcmp(key, "inverse_construct_23_M2_max_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M2_max_GeV);
+
 
     if (strcmp(key, "inverse_nufit_theta12_deg") == 0) return parse_double(value, &cfg->inverse_nufit_theta12_deg);
     if (strcmp(key, "inverse_nufit_theta23_deg") == 0) return parse_double(value, &cfg->inverse_nufit_theta23_deg);
@@ -910,18 +996,6 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "output_cp_heatmap_csv_path") == 0) {
         strncpy(cfg->output_cp_heatmap_csv_path, value, sizeof(cfg->output_cp_heatmap_csv_path) - 1);
         cfg->output_cp_heatmap_csv_path[sizeof(cfg->output_cp_heatmap_csv_path) - 1] = '\0';
-        return 0;
-    }
-
-    if (strcmp(key, "output_inverse_csv_path") == 0) {
-        strncpy(cfg->output_inverse_csv_path, value, sizeof(cfg->output_inverse_csv_path) - 1);
-        cfg->output_inverse_csv_path[sizeof(cfg->output_inverse_csv_path) - 1] = '\0';
-        return 0;
-    }
-
-    if (strcmp(key, "output_inverse_md_csv_path") == 0) {
-        strncpy(cfg->output_inverse_md_csv_path, value, sizeof(cfg->output_inverse_md_csv_path) - 1);
-        cfg->output_inverse_md_csv_path[sizeof(cfg->output_inverse_md_csv_path) - 1] = '\0';
         return 0;
     }
 
@@ -1004,6 +1078,9 @@ static int finalize_config(SimulationConfig *cfg) {
     if (cfg->matter_a_cc_coeff_eV2_per_GeV_per_gcm3 <= 0.0) {
         cfg->matter_a_cc_coeff_eV2_per_GeV_per_gcm3 = 1.52e-4;
     }
+    if (cfg->dune_source_model[0] == '\0') {
+        strncpy(cfg->dune_source_model, "uniform", sizeof(cfg->dune_source_model) - 1);
+    }
 
     if (cfg->matter_density_g_cm3 <= 0.0 ||
         cfg->matter_electron_fraction < 0.0 || cfg->matter_electron_fraction > 1.0 ||
@@ -1078,36 +1155,6 @@ static int finalize_config(SimulationConfig *cfg) {
             return 4;
         }
         if (!use_log && cfg->energy_step_GeV <= 0.0) {
-            return 4;
-        }
-    }
-
-    if (cfg->operation == OPERATION_INVERSE_SEESAW_3P1) {
-        if (cfg->inverse_mu00_count <= 0) {
-            cfg->inverse_mu00_values_eV[0] = cfg->inverse_mu00_eV;
-            cfg->inverse_mu00_count = 1;
-        }
-
-        if (cfg->inverse_ci_normal_ordering != 0) {
-            cfg->inverse_ci_normal_ordering = 1;
-        }
-
-        if (cfg->inverse_ci_m_light_eV[0] <= 0.0 && cfg->inverse_ci_m_light_eV[1] <= 0.0 && cfg->inverse_ci_m_light_eV[2] <= 0.0) {
-            if (cfg->inverse_ci_normal_ordering) {
-                cfg->inverse_ci_m_light_eV[0] = 0.0;
-                cfg->inverse_ci_m_light_eV[1] = sqrt(fmax(0.0, cfg->dm21_eV2));
-                cfg->inverse_ci_m_light_eV[2] = sqrt(fmax(0.0, cfg->dm31_eV2));
-            } else {
-                const double m1 = sqrt(fmax(0.0, cfg->dm31_eV2));
-                cfg->inverse_ci_m_light_eV[0] = m1;
-                cfg->inverse_ci_m_light_eV[1] = sqrt(fmax(0.0, m1 * m1 + cfg->dm21_eV2));
-                cfg->inverse_ci_m_light_eV[2] = 0.0;
-            }
-        }
-
-        if (cfg->inverse_mu00_count <= 0 || cfg->inverse_mu00_count > MAX_INVERSE_MU_VALUES ||
-            cfg->output_inverse_csv_path[0] == '\0' || cfg->energy_step_GeV <= 0.0 || cfg->baseline_km <= 0.0 ||
-            cfg->inverse_ci_M_heavy_GeV[0] <= 0.0 || cfg->inverse_ci_M_heavy_GeV[1] <= 0.0) {
             return 4;
         }
     }
@@ -1282,10 +1329,14 @@ static int finalize_config(SimulationConfig *cfg) {
             cfg->inverse_construct_23_samples = 10000;
         }
 
-        if (cfg->output_inverse_construct_23_csv_path[0] == '\0') {
-            strncpy(cfg->output_inverse_construct_23_csv_path,
-                    "data/inverse_seesaw/3p1/inverse_construct_23_3p1.csv",
-                    sizeof(cfg->output_inverse_construct_23_csv_path) - 1);
+        if (cfg->inverse_kept_points_dir[0] == '\0') {
+            strncpy(cfg->inverse_kept_points_dir,
+                    "data/inverse_seesaw/3p1/inverse_construct_23_kept_points",
+                    sizeof(cfg->inverse_kept_points_dir) - 1);
+        }
+
+        if (cfg->inverse_clear_kept_points_dir != 0) {
+            cfg->inverse_clear_kept_points_dir = 1;
         }
 
         if (cfg->inverse_construct_23_dm41_min_eV2 <= 0.0 && cfg->inverse_construct_23_dm41_max_eV2 <= 0.0) {
@@ -1303,22 +1354,58 @@ static int finalize_config(SimulationConfig *cfg) {
             cfg->inverse_construct_23_zeta_direction_max_deg = 360.0;
         }
 
+        if (cfg->inverse_construct_23_alpha21_min_deg == 0.0 && cfg->inverse_construct_23_alpha21_max_deg == 0.0) {
+            cfg->inverse_construct_23_alpha21_min_deg = 0.0;
+            cfg->inverse_construct_23_alpha21_max_deg = 360.0;
+        }
+
+        if (cfg->inverse_construct_23_alpha31_min_deg == 0.0 && cfg->inverse_construct_23_alpha31_max_deg == 0.0) {
+            cfg->inverse_construct_23_alpha31_min_deg = 0.0;
+            cfg->inverse_construct_23_alpha31_max_deg = 360.0;
+        }
+
         if (cfg->inverse_construct_23_f11_min == 0.0 && cfg->inverse_construct_23_f11_max == 0.0 &&
             cfg->inverse_construct_23_f12_min == 0.0 && cfg->inverse_construct_23_f12_max == 0.0 &&
             cfg->inverse_construct_23_f21_min == 0.0 && cfg->inverse_construct_23_f21_max == 0.0 &&
             cfg->inverse_construct_23_f22_min == 0.0 && cfg->inverse_construct_23_f22_max == 0.0) {
-            cfg->inverse_construct_23_f11_min = -0.3;
+            cfg->inverse_construct_23_f11_min = 0.0;
             cfg->inverse_construct_23_f11_max = 0.3;
-            cfg->inverse_construct_23_f12_min = -0.3;
+            cfg->inverse_construct_23_f12_min = 0.0;
             cfg->inverse_construct_23_f12_max = 0.3;
-            cfg->inverse_construct_23_f21_min = -0.3;
+            cfg->inverse_construct_23_f21_min = 0.0;
             cfg->inverse_construct_23_f21_max = 0.3;
-            cfg->inverse_construct_23_f22_min = -0.3;
+            cfg->inverse_construct_23_f22_min = 0.0;
             cfg->inverse_construct_23_f22_max = 0.3;
+        }
+
+        if (cfg->inverse_construct_23_f11_phase_min_deg == 0.0 && cfg->inverse_construct_23_f11_phase_max_deg == 0.0 &&
+            cfg->inverse_construct_23_f12_phase_min_deg == 0.0 && cfg->inverse_construct_23_f12_phase_max_deg == 0.0 &&
+            cfg->inverse_construct_23_f21_phase_min_deg == 0.0 && cfg->inverse_construct_23_f21_phase_max_deg == 0.0 &&
+            cfg->inverse_construct_23_f22_phase_min_deg == 0.0 && cfg->inverse_construct_23_f22_phase_max_deg == 0.0) {
+            cfg->inverse_construct_23_f11_phase_min_deg = 0.0;
+            cfg->inverse_construct_23_f11_phase_max_deg = 360.0;
+            cfg->inverse_construct_23_f12_phase_min_deg = 0.0;
+            cfg->inverse_construct_23_f12_phase_max_deg = 360.0;
+            cfg->inverse_construct_23_f21_phase_min_deg = 0.0;
+            cfg->inverse_construct_23_f21_phase_max_deg = 360.0;
+            cfg->inverse_construct_23_f22_phase_min_deg = 0.0;
+            cfg->inverse_construct_23_f22_phase_max_deg = 360.0;
         }
 
         if (cfg->inverse_construct_23_f_det_min_abs <= 0.0) {
             cfg->inverse_construct_23_f_det_min_abs = 1e-6;
+        }
+
+        if (cfg->inverse_construct_23_f_det_max_abs <= 0.0) {
+            cfg->inverse_construct_23_f_det_max_abs = 1e30;
+        }
+
+        if (cfg->inverse_construct_23_f_sigma_min_min <= 0.0) {
+            cfg->inverse_construct_23_f_sigma_min_min = 1e-6;
+        }
+
+        if (cfg->inverse_construct_23_kappa_f_max <= 0.0) {
+            cfg->inverse_construct_23_kappa_f_max = 1e30;
         }
 
         if (cfg->inverse_construct_23_M1_min_GeV <= 0.0 && cfg->inverse_construct_23_M1_max_GeV <= 0.0 &&
@@ -1329,19 +1416,28 @@ static int finalize_config(SimulationConfig *cfg) {
             cfg->inverse_construct_23_M2_max_GeV = 1.0e3;
         }
 
+
         if (cfg->inverse_construct_23_samples <= 0 ||
             cfg->inverse_construct_23_dm41_min_eV2 <= 0.0 || cfg->inverse_construct_23_dm41_max_eV2 < cfg->inverse_construct_23_dm41_min_eV2 ||
             cfg->inverse_construct_23_zeta_norm_min < 0.0 || cfg->inverse_construct_23_zeta_norm_max < cfg->inverse_construct_23_zeta_norm_min ||
             cfg->inverse_construct_23_zeta_norm_max >= 1.0 ||
             cfg->inverse_construct_23_zeta_direction_max_deg < cfg->inverse_construct_23_zeta_direction_min_deg ||
-            cfg->inverse_construct_23_f11_max < cfg->inverse_construct_23_f11_min ||
-            cfg->inverse_construct_23_f12_max < cfg->inverse_construct_23_f12_min ||
-            cfg->inverse_construct_23_f21_max < cfg->inverse_construct_23_f21_min ||
-            cfg->inverse_construct_23_f22_max < cfg->inverse_construct_23_f22_min ||
+            cfg->inverse_construct_23_alpha21_max_deg < cfg->inverse_construct_23_alpha21_min_deg ||
+            cfg->inverse_construct_23_alpha31_max_deg < cfg->inverse_construct_23_alpha31_min_deg ||
+            cfg->inverse_construct_23_f11_min < 0.0 || cfg->inverse_construct_23_f11_max < cfg->inverse_construct_23_f11_min ||
+            cfg->inverse_construct_23_f12_min < 0.0 || cfg->inverse_construct_23_f12_max < cfg->inverse_construct_23_f12_min ||
+            cfg->inverse_construct_23_f21_min < 0.0 || cfg->inverse_construct_23_f21_max < cfg->inverse_construct_23_f21_min ||
+            cfg->inverse_construct_23_f22_min < 0.0 || cfg->inverse_construct_23_f22_max < cfg->inverse_construct_23_f22_min ||
+            cfg->inverse_construct_23_f11_phase_max_deg < cfg->inverse_construct_23_f11_phase_min_deg ||
+            cfg->inverse_construct_23_f12_phase_max_deg < cfg->inverse_construct_23_f12_phase_min_deg ||
+            cfg->inverse_construct_23_f21_phase_max_deg < cfg->inverse_construct_23_f21_phase_min_deg ||
+            cfg->inverse_construct_23_f22_phase_max_deg < cfg->inverse_construct_23_f22_phase_min_deg ||
             cfg->inverse_construct_23_f_det_min_abs <= 0.0 ||
+            cfg->inverse_construct_23_f_det_max_abs < cfg->inverse_construct_23_f_det_min_abs ||
+            cfg->inverse_construct_23_f_sigma_min_min <= 0.0 ||
+            cfg->inverse_construct_23_kappa_f_max <= 0.0 ||
             cfg->inverse_construct_23_M1_min_GeV <= 0.0 || cfg->inverse_construct_23_M1_max_GeV < cfg->inverse_construct_23_M1_min_GeV ||
-            cfg->inverse_construct_23_M2_min_GeV <= 0.0 || cfg->inverse_construct_23_M2_max_GeV < cfg->inverse_construct_23_M2_min_GeV ||
-            cfg->output_inverse_construct_23_csv_path[0] == '\0') {
+            cfg->inverse_construct_23_M2_min_GeV <= 0.0 || cfg->inverse_construct_23_M2_max_GeV < cfg->inverse_construct_23_M2_min_GeV) {
             return 4;
         }
     }
@@ -1357,12 +1453,25 @@ static int load_config_file_recursive(const char *file_path, SimulationConfig *c
 
     {
         char line[1024];
+        char current_section[128] = "";
         int line_no = 0;
         while (fgets(line, sizeof(line), in) != NULL) {
             ++line_no;
             trim_in_place(line);
 
             if (line[0] == '\0' || line[0] == '#') {
+                continue;
+            }
+            if (line[0] == '[') {
+                char *end_section = strchr(line, ']');
+                if (!end_section) {
+                    fclose(in);
+                    return 2;
+                }
+                *end_section = '\0';
+                strncpy(current_section, line + 1, sizeof(current_section) - 1);
+                current_section[sizeof(current_section) - 1] = '\0';
+                trim_in_place(current_section);
                 continue;
             }
 
@@ -1408,7 +1517,14 @@ static int load_config_file_recursive(const char *file_path, SimulationConfig *c
                         continue;
                     }
 
-                    if (set_key_value(cfg, key, value) != 0) {
+                    int set_status = set_key_value(cfg, key, value);
+                    if (set_status != 0 && current_section[0] != '\0') {
+                        char section_key[256];
+                        snprintf(section_key, sizeof(section_key), "%s.%s", current_section, key);
+                        set_status = set_key_value(cfg, section_key, value);
+                    }
+
+                    if (set_status != 0) {
                         fprintf(stderr, "Cle inconnue ou valeur invalide (%s:%d): %s\n", file_path, line_no, key);
                         if (is_removed_legacy_key(key)) {
                             fprintf(stderr, "  La cle '%s' n'est plus supportee dans cette version.\n", key);
@@ -1465,14 +1581,18 @@ const char *operation_to_string(SimulationOperation operation) {
             return "heatmap_delta_pmu_mu_3p2";
         case OPERATION_CP_HEATMAP_3P1:
             return "cp_heatmap_3p1";
-        case OPERATION_INVERSE_SEESAW_3P1:
-            return "inverse_seesaw_3p1";
         case OPERATION_INVERSE_PMNS_FILTER_3P1:
             return "inverse_pmns_filter_3p1";
         case OPERATION_INVERSE_PMNS_FILTER_3P2:
             return "inverse_pmns_filter_3p2";
         case OPERATION_INVERSE_CONSTRUCT_23_3P1:
             return "inverse_construct_23_3p1";
+        case OPERATION_DUNE_ND_PREDICT_SPECTRUM:
+            return "dune_nd_predict_spectrum";
+        case OPERATION_DUNE_FD_FIG4_VALIDATION:
+            return "dune_fd_fig4_validation";
+        case OPERATION_DUNE_ND_FIG4_SOURCE_LINE:
+            return "dune_nd_fig4_source_line";
         default:
             return "unset";
     }

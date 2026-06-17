@@ -2,8 +2,12 @@
 #include "scan.h"
 
 #include <stdio.h>
+#include <string.h>
 
 int main(int argc, char **argv) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+
     SimulationConfig cfg;
     const char *config_path = (argc >= 2) ? argv[1] : "config.txt";
 
@@ -11,6 +15,22 @@ int main(int argc, char **argv) {
     if (config_status != 0) {
         fprintf(stderr, "Erreur de lecture %s (code=%d)\n", config_path, config_status);
         return 1;
+    }
+
+    for (int i = 2; i < argc; ++i) {
+        if (strcmp(argv[i], "--source-point") == 0) {
+            strncpy(cfg.dune_source_model, "point", sizeof(cfg.dune_source_model) - 1);
+            cfg.dune_source_model[sizeof(cfg.dune_source_model) - 1] = '\0';
+        } else if (strcmp(argv[i], "--source-uniform") == 0) {
+            strncpy(cfg.dune_source_model, "uniform", sizeof(cfg.dune_source_model) - 1);
+            cfg.dune_source_model[sizeof(cfg.dune_source_model) - 1] = '\0';
+        } else if (strcmp(argv[i], "--source-dk2nu") == 0) {
+            strncpy(cfg.dune_source_model, "dk2nu", sizeof(cfg.dune_source_model) - 1);
+            cfg.dune_source_model[sizeof(cfg.dune_source_model) - 1] = '\0';
+        } else {
+            fprintf(stderr, "Option inconnue: %s\n", argv[i]);
+            return 1;
+        }
     }
 
     int run_status = 0;
@@ -64,13 +84,6 @@ int main(int argc, char **argv) {
                 return 10;
             }
             break;
-        case OPERATION_INVERSE_SEESAW_3P1:
-            run_status = run_scan_inverse_seesaw_3p1(&cfg);
-            if (run_status != 0) {
-                fprintf(stderr, "Erreur scan inverse seesaw 3+1 (code=%d)\n", run_status);
-                return 12;
-            }
-            break;
         case OPERATION_INVERSE_PMNS_FILTER_3P1:
             run_status = run_scan_inverse_pmns_filter_3p1(&cfg);
             if (run_status != 0) {
@@ -90,6 +103,27 @@ int main(int argc, char **argv) {
             if (run_status != 0) {
                 fprintf(stderr, "Erreur construction adaptee inverse (2,3) 3+1 (code=%d)\n", run_status);
                 return 14;
+            }
+            break;
+        case OPERATION_DUNE_ND_PREDICT_SPECTRUM:
+            run_status = run_dune_nd_predict_spectrum(&cfg);
+            if (run_status != 0) {
+                fprintf(stderr, "Erreur prediction spectre DUNE ND (code=%d)\n", run_status);
+                return 16;
+            }
+            break;
+        case OPERATION_DUNE_FD_FIG4_VALIDATION:
+            run_status = run_dune_fd_fig4_validation(&cfg);
+            if (run_status != 0) {
+                fprintf(stderr, "Erreur validation Fig. 4 DUNE FD (code=%d)\n", run_status);
+                return 21;
+            }
+            break;
+        case OPERATION_DUNE_ND_FIG4_SOURCE_LINE:
+            run_status = run_dune_nd_fig4_source_line(&cfg);
+            if (run_status != 0) {
+                fprintf(stderr, "Erreur Fig. 4-like DUNE ND source-line (code=%d)\n", run_status);
+                return 22;
             }
             break;
         default:

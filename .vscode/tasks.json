@@ -1,45 +1,51 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Build C",
-      "type": "shell",
-      "command": "gcc",
-      "args": [
-        "-Wall",
-        "-Wextra",
-        "-std=c11",
-        "-Iinclude",
-        "src/casas_ibarra.c",
-        "src/config.c",
-        "src/inverse_seesaw.c",
-        "src/io_csv.c",
-        "src/main.c",
-        "src/oscillation.c",
-        "src/pmns.c",
-        "src/scan_energy.c",
-        "src/scan_heatmaps.c",
-        "src/scan_inverse.c",
-        "src/scan_inverse_pmns_filter.c",
-        "src/utils.c",
-        "-o",
-        "bin/app.exe",
-        "-lm"
-      ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
-      "label": "Run C",
-      "type": "shell",
-      "command": ".\\bin\\app.exe",
-      "dependsOn": "Build C",
-      "problemMatcher": []
-    }
-  ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build C",
+			"type": "shell",
+			"command": "gcc",
+			"args": [
+				"-Wall",
+				"-Wextra",
+				"-std=c11",
+				"-Iinclude",
+				"src/casas_ibarra.c",
+				"src/config.c",
+				"src/inverse_seesaw.c",
+				"src/io_csv.c",
+				"src/main.c",
+				"src/oscillation.c",
+				"src/pmns.c",
+				"src/scan_energy.c",
+				"src/scan_heatmaps.c",
+				"src/scan_inverse.c",
+				"src/scan_inverse_pmns_filter.c",
+				"src/utils.c",
+				"-o",
+				"bin/app.exe",
+				"-lm"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "Run C",
+			"type": "shell",
+			"command": ".\\bin\\app.exe",
+			"dependsOn": "Build C",
+			"problemMatcher": []
+		},
+		{
+			"label": "Run inverse_construct_23 once",
+			"type": "shell",
+			"command": ".\\bin\\app.exe",
+			"isBackground": false
+		}
+	]
 }

@@ -2,29 +2,115 @@
 
 from pathlib import Path
 import numpy as np
-import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-OUTPUT_PATH = Path("figures/inverse_seesaw/3p1/inverse_construct_23_sterile_parameter_distributions.png")
-CSV_PATH = Path("data/inverse_seesaw/3p1/inverse_construct_23_3p1.csv")
+from inverse_construct_23_config import get_inverse_kept_points_dir
+from inverse_construct_23_kept_points import load_kept_points_dataframe
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+OUTPUT_PATH = REPO_ROOT / "figures" / "inverse_seesaw" / "3p1" / "inverse_construct_23_parameter_distributions.png"
+DATA_DIR = get_inverse_kept_points_dir()
+F_PARAMETER_REPRESENTATION = "abs_phase"  # "abs_phase" or "re_im"
+
+
+def to_degrees_if_radians(values):
+    arr = np.asarray(values, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return arr
+
+    # Backward compatibility: older CSVs saved phi_zeta in radians
+    # while using the "*_deg" field name.
+    max_abs = np.max(np.abs(finite))
+    if max_abs <= (2.0 * np.pi + 1e-6):
+        return np.rad2deg(arr)
+    return arr
+
+
+def optional_column(df, key: str):
+    if key in df.columns:
+        return df[key].values
+    return np.zeros(len(df), dtype=float)
+
+
+def f_components(df, fij: str):
+    mag = df[fij].values
+    phase_rad = np.deg2rad(df[f"{fij}_phase_deg"].values)
+    real = mag * np.cos(phase_rad)
+    imag = mag * np.sin(phase_rad)
+    return real, imag
+
+
+def build_f_parameters(df_eta_pass, df_eta_fail):
+    if F_PARAMETER_REPRESENTATION == "abs_phase":
+        return {
+            'f11_abs': (df_eta_pass['f11'].values, df_eta_fail['f11'].values, r'$|f_{11}|$'),
+            'f12_abs': (df_eta_pass['f12'].values, df_eta_fail['f12'].values, r'$|f_{12}|$'),
+            'f21_abs': (df_eta_pass['f21'].values, df_eta_fail['f21'].values, r'$|f_{21}|$'),
+            'f22_abs': (df_eta_pass['f22'].values, df_eta_fail['f22'].values, r'$|f_{22}|$'),
+            'phi_f11': (df_eta_pass['f11_phase_deg'].values, df_eta_fail['f11_phase_deg'].values, r'$\phi_{f_{11}}$ [deg]'),
+            'phi_f12': (df_eta_pass['f12_phase_deg'].values, df_eta_fail['f12_phase_deg'].values, r'$\phi_{f_{12}}$ [deg]'),
+            'phi_f21': (df_eta_pass['f21_phase_deg'].values, df_eta_fail['f21_phase_deg'].values, r'$\phi_{f_{21}}$ [deg]'),
+            'phi_f22': (df_eta_pass['f22_phase_deg'].values, df_eta_fail['f22_phase_deg'].values, r'$\phi_{f_{22}}$ [deg]'),
+        }
+
+    if F_PARAMETER_REPRESENTATION == "re_im":
+        f11_re_pass, f11_im_pass = f_components(df_eta_pass, 'f11')
+        f11_re_fail, f11_im_fail = f_components(df_eta_fail, 'f11')
+        f12_re_pass, f12_im_pass = f_components(df_eta_pass, 'f12')
+        f12_re_fail, f12_im_fail = f_components(df_eta_fail, 'f12')
+        f21_re_pass, f21_im_pass = f_components(df_eta_pass, 'f21')
+        f21_re_fail, f21_im_fail = f_components(df_eta_fail, 'f21')
+        f22_re_pass, f22_im_pass = f_components(df_eta_pass, 'f22')
+        f22_re_fail, f22_im_fail = f_components(df_eta_fail, 'f22')
+
+        return {
+            'f11_re': (f11_re_pass, f11_re_fail, r'$\Re(f_{11})$'),
+            'f11_im': (f11_im_pass, f11_im_fail, r'$\Im(f_{11})$'),
+            'f12_re': (f12_re_pass, f12_re_fail, r'$\Re(f_{12})$'),
+            'f12_im': (f12_im_pass, f12_im_fail, r'$\Im(f_{12})$'),
+            'f21_re': (f21_re_pass, f21_re_fail, r'$\Re(f_{21})$'),
+            'f21_im': (f21_im_pass, f21_im_fail, r'$\Im(f_{21})$'),
+            'f22_re': (f22_re_pass, f22_re_fail, r'$\Re(f_{22})$'),
+            'f22_im': (f22_im_pass, f22_im_fail, r'$\Im(f_{22})$'),
+        }
+
+    raise ValueError("F_PARAMETER_REPRESENTATION must be 'abs_phase' or 're_im'.")
 
 
 def load_distributions():
-    """Load CSV and extract parameter distributions (solve_ok=1 only)"""
-    if not CSV_PATH.exists():
-        raise FileNotFoundError(f"CSV file not found: {CSV_PATH}")
-    
-    df = pd.read_csv(CSV_PATH)
-    print(f"Total rows in CSV: {len(df)}")
-    
-    # Filter to pmns_pass=1 points only (primary filter)
-    df_pmns = df[(df['solve_ok'] == 1) & (df['pmns_pass'] == 1)].copy()
-    
+    """Load kept points and extract parameter distributions (PMNS-kept points only)."""
+    if not DATA_DIR.exists():
+        raise FileNotFoundError(f"Kept points directory not found: {DATA_DIR}")
+
+    df_all = load_kept_points_dataframe(DATA_DIR)
+    print(f"Total points found in CSV: {len(df_all)}")
+
+    required_columns = ["pmns_pass", "eta_pass"]
+    missing = [col for col in required_columns if col not in df_all.columns]
+    if missing:
+        raise RuntimeError(
+            "Missing required columns in construct_23 dataset: "
+            + ", ".join(missing)
+            + ". Regenerate the CSV with pmns_pass/eta_pass metadata."
+        )
+
+    df_all["pmns_pass"] = df_all["pmns_pass"].fillna(0).astype(int)
+    df_all["eta_pass"] = df_all["eta_pass"].fillna(0).astype(int)
+
+    df_pmns = df_all[df_all["pmns_pass"] == 1].copy()
+    n_total = len(df_all)
     n_pmns = len(df_pmns)
-    print(f"Points PMNS OK (pmns_pass=1): {n_pmns}")
-    
+    print(f"Points PMNS OK: {n_pmns}")
+
+    if n_total > 0 and n_pmns == n_total:
+        print(
+            "[info] All loaded points have pmns_pass=1. "
+            "This usually means the input dataset is already PMNS-filtered."
+        )
+
     if n_pmns == 0:
         raise RuntimeError("No pmns_pass=1 points found!")
     
@@ -34,21 +120,24 @@ def load_distributions():
     
     n_eta_pass = len(df_eta_pass)
     n_eta_fail = len(df_eta_fail)
+
+    zeta_direction_eta_pass_deg = to_degrees_if_radians(df_eta_pass['zeta_direction_deg'].values)
+    zeta_direction_eta_fail_deg = to_degrees_if_radians(df_eta_fail['zeta_direction_deg'].values)
     
     # Extract parameter distributions: red=pmns+eta, blue=pmns only
     parameters = {
         'dm41': (df_eta_pass['dm41_target_eV2'].values, df_eta_fail['dm41_target_eV2'].values, r'$\Delta m_{41}$ [eV$^2$]'),
         'zeta_norm': (df_eta_pass['zeta_norm'].values, df_eta_fail['zeta_norm'].values, r'$\|\zeta\|$'),
-        'zeta_direction': (df_eta_pass['zeta_direction_deg'].values, df_eta_fail['zeta_direction_deg'].values, r'$\phi_\zeta$ [deg]'),
-        'f11': (df_eta_pass['f11'].values, df_eta_fail['f11'].values, r'$f_{11}$'),
-        'f12': (df_eta_pass['f12'].values, df_eta_fail['f12'].values, r'$f_{12}$'),
-        'f21': (df_eta_pass['f21'].values, df_eta_fail['f21'].values, r'$f_{21}$'),
-        'f22': (df_eta_pass['f22'].values, df_eta_fail['f22'].values, r'$f_{22}$'),
+        'zeta_direction': (zeta_direction_eta_pass_deg, zeta_direction_eta_fail_deg, r'$\phi_\zeta$ [deg]'),
+        'majorana_alpha21': (optional_column(df_eta_pass, 'majorana_alpha21_deg'), optional_column(df_eta_fail, 'majorana_alpha21_deg'), r'$\alpha_{21}$ [deg]'),
+        'majorana_alpha31': (optional_column(df_eta_pass, 'majorana_alpha31_deg'), optional_column(df_eta_fail, 'majorana_alpha31_deg'), r'$\alpha_{31}$ [deg]'),
         'M1': (df_eta_pass['M1_GeV'].values, df_eta_fail['M1_GeV'].values, r'$M_1$ [GeV]'),
         'M2': (df_eta_pass['M2_GeV'].values, df_eta_fail['M2_GeV'].values, r'$M_2$ [GeV]'),
     }
+
+    parameters.update(build_f_parameters(df_eta_pass, df_eta_fail))
     
-    return parameters, n_pmns, n_eta_pass, n_eta_fail
+    return parameters, n_total, n_pmns, n_eta_pass, n_eta_fail
 
 
 def plot_parameter(ax, label, eta_pass_values, eta_fail_values, xlabel):
@@ -67,6 +156,7 @@ def plot_parameter(ax, label, eta_pass_values, eta_fail_values, xlabel):
             alpha=0.8,
             linewidth=0.6,
             edgecolor="black",
+            label=["PMNS+ETA OK", "PMNS OK mais ETA KO"],
         )
     
     ax.set_title(label)
@@ -76,7 +166,7 @@ def plot_parameter(ax, label, eta_pass_values, eta_fail_values, xlabel):
 
 
 def main():
-    parameters, n_pmns, n_eta_pass, n_eta_fail = load_distributions()
+    parameters, n_total, n_pmns, n_eta_pass, n_eta_fail = load_distributions()
     
     # Create figure with subplots (3 columns, auto rows)
     ncols = 3
@@ -89,15 +179,26 @@ def main():
     # Plot each parameter
     for ax, (param_name, (eta_pass_vals, eta_fail_vals, xlabel)) in zip(axes_flat, param_list):
         plot_parameter(ax, param_name, eta_pass_vals, eta_fail_vals, xlabel)
+
+    if len(param_list) > 0:
+        axes_flat[0].legend(loc="upper right", fontsize=8)
     
     # Turn off unused subplots
     for ax in axes_flat[len(param_list):]:
         ax.axis("off")
     
     # Set main title
-    fig.suptitle(
-        f"Distributions des paramètres construct_23 ({n_pmns} pts PMNS OK — Rouge: +η OK ({n_eta_pass}), Bleu: η non OK ({n_eta_fail}))"
-    )
+    if n_pmns == n_total:
+        title = (
+            f"Distributions des paramètres (échantillon déjà PMNS OK: {n_pmns}/{n_total}; "
+            f"+eta OK {n_eta_pass}/{n_pmns})"
+        )
+    else:
+        title = (
+            f"Distributions des paramètres ({n_pmns}/{n_total} PMNS OK; "
+            f"+eta OK {n_eta_pass}/{n_pmns})"
+        )
+    fig.suptitle(title)
     
     # Save figure
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
