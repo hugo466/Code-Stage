@@ -1,10 +1,5 @@
 #!/usr/bin/env python
-"""Plot the ND point/uniform/dk2nu source-model comparison.
-
-The input CSV files are produced by scan_dune_nd_fig4.c.  The plot focuses on
-the total selected sample in each panel and compares how the source averaging
-changes N_ISS/N_3nu.
-"""
+"""Plot the ND point/uniform/dk2nu source-model comparison."""
 
 from __future__ import annotations
 
@@ -27,8 +22,9 @@ DEFAULT_INPUTS = {
     "uniform": DEFAULT_BASE / "fig4_nd_source_line_iss23_vs_active3nu.csv",
     "dk2nu": DEFAULT_BASE / "fig4_nd_dk2nu_iss23_vs_active3nu.csv",
 }
-DEFAULT_OUT = Path("figures/dune_nd/point_70/source_models/nd_source_model_comparison.png")
+DEFAULT_OUT = Path("figures/dune_nd/iss23/construct23_point70/source_models/nd_source_model_comparison.png")
 
+PANELS = ["FHC_app", "RHC_app", "FHC_dis", "RHC_dis"]
 PANEL_COMPONENTS = {
     "FHC_app": ["nc", "numu", "beam", "signal"],
     "RHC_app": ["nc", "numu", "beam", "signal"],
@@ -58,6 +54,28 @@ MODEL_STYLES = {
 }
 
 
+def labels_from_frames(frames: dict[str, pd.DataFrame]) -> dict[str, str]:
+    labels = dict(MODEL_LABELS)
+
+    point = frames.get("point")
+    if point is not None and not point.empty and "baseline_km" in point.columns:
+        labels["point"] = f"source ponctuelle (L={1000.0 * float(point['baseline_km'].iloc[0]):.0f} m)"
+
+    uniform = frames.get("uniform")
+    if (
+        uniform is not None
+        and not uniform.empty
+        and {"source_z_start_m", "decay_pipe_length_m"}.issubset(uniform.columns)
+    ):
+        z_min = float(uniform["source_z_start_m"].iloc[0])
+        z_max = z_min + float(uniform["decay_pipe_length_m"].iloc[0])
+        labels["uniform"] = (
+            "source uniforme "
+            f"(z=[{z_min:.0f},{z_max:.0f}] m)"
+        )
+    return labels
+
+
 def read_inputs(paths: dict[str, Path]) -> dict[str, pd.DataFrame]:
     frames: dict[str, pd.DataFrame] = {}
     for model, path in paths.items():
@@ -73,8 +91,7 @@ def read_inputs(paths: dict[str, Path]) -> dict[str, pd.DataFrame]:
 
 
 def total_panel(df: pd.DataFrame, panel: str) -> pd.DataFrame:
-    components = PANEL_COMPONENTS[panel]
-    selected = df[(df["panel"] == panel) & (df["component"].isin(components))]
+    selected = df[(df["panel"] == panel) & (df["component"].isin(PANEL_COMPONENTS[panel]))]
     grouped = (
         selected.groupby("Erec_GeV", as_index=False)[["globes_events", "iss23_events"]]
         .sum()
@@ -113,17 +130,16 @@ def step(ax, data: pd.DataFrame, y_col: str, model: str, label: str | None = Non
     )
 
 
-def draw_panel(ax, rax, panel: str, frames: dict[str, pd.DataFrame], show_xlabel: bool) -> dict[str, float]:
+def draw_panel(ax, panel: str, frames: dict[str, pd.DataFrame], labels: dict[str, str], show_xlabel: bool) -> dict[str, float]:
     totals = {model: total_panel(df, panel) for model, df in frames.items()}
     ratio_values: list[float] = []
-    diff_values: list[float] = []
     summary: dict[str, float] = {}
 
     dk2nu = totals["dk2nu"][["Erec_GeV", "iss23_events"]].rename(columns={"iss23_events": "dk2nu_iss"})
     for model in ["point", "uniform", "dk2nu"]:
         data = totals[model]
         ratio_values.extend(data["ratio_iss_over_3nu"].to_numpy(dtype=float).tolist())
-        step(ax, data, "ratio_iss_over_3nu", model, MODEL_LABELS[model])
+        step(ax, data, "ratio_iss_over_3nu", model, labels[model])
 
         merged = data.merge(dk2nu, on="Erec_GeV", how="inner")
         rel = np.divide(
@@ -132,10 +148,7 @@ def draw_panel(ax, rax, panel: str, frames: dict[str, pd.DataFrame], show_xlabel
             out=np.full(len(merged), np.nan, dtype=float),
             where=np.abs(merged["dk2nu_iss"].to_numpy(dtype=float)) > 1e-12,
         )
-        merged["rel_vs_dk2nu_percent"] = 100.0 * rel
-        diff_values.extend(merged["rel_vs_dk2nu_percent"].to_numpy(dtype=float).tolist())
-        step(rax, merged, "rel_vs_dk2nu_percent", model)
-        summary[model] = float(np.nanmax(np.abs(merged["rel_vs_dk2nu_percent"])))
+        summary[model] = float(100.0 * np.nanmax(np.abs(rel)))
 
     ax.set_title(PANEL_TITLES[panel], fontsize=10, fontweight="bold", pad=8)
     ax.set_xlim(0.5, 8.0)
@@ -144,43 +157,28 @@ def draw_panel(ax, rax, panel: str, frames: dict[str, pd.DataFrame], show_xlabel
     formatter = ScalarFormatter(useOffset=False)
     formatter.set_scientific(False)
     ax.yaxis.set_major_formatter(formatter)
-    ax.tick_params(labelbottom=False, direction="in", top=True, right=True)
+    if show_xlabel:
+        ax.set_xlabel("Energie reconstruite [GeV]")
+    else:
+        ax.tick_params(labelbottom=False)
+    ax.tick_params(direction="in", top=True, right=True)
     ax.minorticks_on()
     ax.tick_params(which="minor", direction="in", top=True, right=True)
     ax.grid(alpha=0.25)
-
-    rax.axhline(0.0, color="black", linewidth=0.8)
-    rax.set_xlim(0.5, 8.0)
-    rax.set_ylim(*padded_limits(diff_values, min_span=0.01))
-    if show_xlabel:
-        rax.set_xlabel("Energie reconstruite [GeV]")
-    else:
-        rax.tick_params(labelbottom=False)
-    rax.set_ylabel(r"$\Delta N_{ISS}$ vs dk2nu [%]", fontsize=8)
-    rax.tick_params(direction="in", top=True, right=True, labelsize=8)
-    rax.minorticks_on()
-    rax.tick_params(which="minor", direction="in", top=True, right=True)
-    rax.grid(alpha=0.25)
     return summary
 
 
 def plot_comparison(frames: dict[str, pd.DataFrame], out: Path) -> None:
-    fig = plt.figure(figsize=(10.5, 9.4))
-    grid = fig.add_gridspec(4, 2, height_ratios=[3.0, 1.0, 3.0, 1.0], hspace=0.28, wspace=0.28)
-    axes = {
-        "FHC_app": (fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[1, 0])),
-        "RHC_app": (fig.add_subplot(grid[0, 1]), fig.add_subplot(grid[1, 1])),
-        "FHC_dis": (fig.add_subplot(grid[2, 0]), fig.add_subplot(grid[3, 0])),
-        "RHC_dis": (fig.add_subplot(grid[2, 1]), fig.add_subplot(grid[3, 1])),
-    }
+    labels = labels_from_frames(frames)
+    fig, axes = plt.subplots(2, 2, figsize=(10.5, 7.2), sharex=True)
+    axes_by_panel = dict(zip(PANELS, axes.flat))
 
     summaries: dict[str, dict[str, float]] = {}
-    for panel, (ax, rax) in axes.items():
-        summaries[panel] = draw_panel(ax, rax, panel, frames, show_xlabel=panel.endswith("_dis"))
+    for panel, ax in axes_by_panel.items():
+        summaries[panel] = draw_panel(ax, panel, frames, labels, show_xlabel=panel.endswith("_dis"))
 
-    axes["FHC_app"][0].legend(loc="best", fontsize=8, frameon=False)
-    fig.suptitle("ND comparaison modèles de source ISS(2,3) point 70", fontsize=13, fontweight="bold")
-    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.07, top=0.93)
+    axes_by_panel["FHC_app"].legend(loc="best", fontsize=8, frameon=False)
+    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.08, top=0.97, hspace=0.24, wspace=0.22)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)
     plt.close(fig)
@@ -190,12 +188,12 @@ def plot_comparison(frames: dict[str, pd.DataFrame], out: Path) -> None:
         print(
             f"  {panel}: point={values['point']:.6g}% "
             f"uniform={values['uniform']:.6g}% dk2nu={values['dk2nu']:.6g}%"
-    )
+        )
     print(f"Figure sauvegardee: {out.resolve()}")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="ND comparaison modèles de sources")
+    parser = argparse.ArgumentParser(description="ND comparaison modeles de sources")
     parser.add_argument("--point", type=Path, default=DEFAULT_INPUTS["point"])
     parser.add_argument("--uniform", type=Path, default=DEFAULT_INPUTS["uniform"])
     parser.add_argument("--dk2nu", type=Path, default=DEFAULT_INPUTS["dk2nu"])

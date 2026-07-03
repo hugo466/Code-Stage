@@ -1,9 +1,11 @@
+import argparse
 import csv
 from collections import defaultdict
 from pathlib import Path
 
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 DATA_PATH = Path("data/oscillations/3p2/nd_3p2_probabilities.csv")
@@ -41,24 +43,33 @@ def load_data(path: Path):
     return dict(sorted(grouped.items(), key=lambda item: (item[0][0], item[0][1])))
 
 
-def main():
-    if not DATA_PATH.exists():
-        raise FileNotFoundError(
-            "CSV introuvable. Exécute d'abord le programme C pour générer data/oscillations/3p2/nd_3p2_probabilities.csv"
-        )
+def parse_args():
+    parser = argparse.ArgumentParser(description="Trace les probabilites 3+2 ND en fonction de l'energie.")
+    parser.add_argument("--input", type=Path, default=DATA_PATH)
+    parser.add_argument("--out", type=Path, default=OUTPUT_PATH)
+    parser.add_argument("--dm41", type=float, default=None, help="Valeur de Delta m41^2 a selectionner dans le CSV.")
+    return parser.parse_args()
 
-    data = load_data(DATA_PATH)
+
+def main():
+    args = parse_args()
+    if not args.input.exists():
+        raise FileNotFoundError(f"CSV introuvable: {args.input}. Execute d'abord le programme C pour le generer.")
+
+    data = load_data(args.input)
     if not data:
         raise RuntimeError("Le CSV 3+2 est vide.")
 
     dm41_values = sorted({key[0] for key in data.keys()})
-    target_dm41 = dm41_values[0]
+    target_dm41 = args.dm41 if args.dm41 is not None else dm41_values[0]
 
     filtered = {
         key: values
         for key, values in data.items()
-        if abs(key[0] - target_dm41) < 1e-15
+        if abs(key[0] - target_dm41) <= max(1.0e-12, 1.0e-12 * abs(target_dm41))
     }
+    if not filtered:
+        raise RuntimeError(f"Aucune courbe trouvee pour dm41={target_dm41:g} eV^2 dans {args.input}.")
 
     fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.8), sharex=True)
     ax_left, ax_right = axes
@@ -72,9 +83,9 @@ def main():
     ax_left.set_title(r"$\nu_\mu \to \nu_\mu$ (3+2, disparition)")
     ax_right.set_title(r"$\nu_\mu \to \nu_e$ (3+2, apparition)")
 
-    ax_left.set_ylabel("Probabilité")
-    ax_left.set_xlabel("Énergie [GeV]")
-    ax_right.set_xlabel("Énergie [GeV]")
+    ax_left.set_ylabel("Probabilite")
+    ax_left.set_xlabel("Energie [GeV]")
+    ax_right.set_xlabel("Energie [GeV]")
 
     ax_left.grid(alpha=0.25)
     ax_right.grid(alpha=0.25)
@@ -82,10 +93,10 @@ def main():
     ax_left.legend(fontsize=8)
     ax_right.legend(fontsize=8)
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(OUTPUT_PATH, dpi=180)
-    print(f"Figure sauvegardée: {OUTPUT_PATH}")
+    fig.savefig(args.out, dpi=180)
+    print(f"Figure sauvegardee: {args.out}")
     plt.close(fig)
 
 

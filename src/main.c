@@ -105,6 +105,13 @@ int main(int argc, char **argv) {
                 return 14;
             }
             break;
+        case OPERATION_INVERSE_CONSTRUCT_24_3P2:
+            run_status = run_scan_inverse_construct_24_3p2(&cfg);
+            if (run_status != 0) {
+                fprintf(stderr, "Erreur construction adaptee inverse (2,4) 3+2 (code=%d)\n", run_status);
+                return 15;
+            }
+            break;
         case OPERATION_DUNE_ND_PREDICT_SPECTRUM:
             run_status = run_dune_nd_predict_spectrum(&cfg);
             if (run_status != 0) {
@@ -124,6 +131,13 @@ int main(int argc, char **argv) {
             if (run_status != 0) {
                 fprintf(stderr, "Erreur Fig. 4-like DUNE ND source-line (code=%d)\n", run_status);
                 return 22;
+            }
+            break;
+        case OPERATION_DUNE_BASELINE_EFFECTS_SENSITIVITY:
+            run_status = run_dune_baseline_effects_sensitivity(&cfg);
+            if (run_status != 0) {
+                fprintf(stderr, "Erreur sensibilite DUNE baseline effects (code=%d)\n", run_status);
+                return 23;
             }
             break;
         default:

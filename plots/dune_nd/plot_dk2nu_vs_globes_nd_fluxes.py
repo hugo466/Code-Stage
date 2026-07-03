@@ -34,6 +34,12 @@ FLAVORS = [
     ("nuebar", r"$\bar{\nu}_e$", "#9467bd"),
 ]
 
+FIGSIZE = (13, 8)
+TITLE_FONTSIZE = 15
+LABEL_FONTSIZE = 14
+TICK_FONTSIZE = 12
+LEGEND_FONTSIZE = 11
+
 
 def read_globes_flux(path):
     return pd.read_csv(
@@ -124,7 +130,7 @@ def plot_mode(ax_flux, ax_ratio, mode, dk2nu, globes, emax, *, log_scale):
             color=color,
             linewidth=1.5,
             linestyle="--",
-            label=f"{label} dk2nu raw, $\\sum_z d\\Phi/dE$",
+            label=f"{label} dk2nu",
         )
         ax_ratio.step(energy, residual, where="mid", color=color, linewidth=1.4)
 
@@ -139,16 +145,18 @@ def plot_mode(ax_flux, ax_ratio, mode, dk2nu, globes, emax, *, log_scale):
     if log_scale:
         ax_flux.set_yscale("log")
     ax_flux.set_xlim(0.0, emax)
-    ax_flux.set_title(mode)
-    ax_flux.set_ylabel(r"Flux ND [$\nu\,m^{-2}\,GeV^{-1}\,POT^{-1}$]")
+    ax_flux.set_title(mode, fontsize=TITLE_FONTSIZE)
+    ax_flux.set_ylabel(r"Flux ND [$\nu\,m^{-2}\,GeV^{-1}\,POT^{-1}$]", fontsize=LABEL_FONTSIZE)
     ax_flux.grid(alpha=0.25)
-    ax_flux.legend(fontsize=7, ncol=2)
+    ax_flux.legend(fontsize=LEGEND_FONTSIZE, ncol=2)
+    ax_flux.tick_params(labelsize=TICK_FONTSIZE)
 
     ax_ratio.axhline(0.0, color="black", linewidth=1.0)
     ax_ratio.set_xlim(0.0, emax)
-    ax_ratio.set_xlabel(r"$E_\nu$ [GeV]")
-    ax_ratio.set_ylabel(r"$\Delta\Phi/\Phi$")
+    ax_ratio.set_xlabel(r"$E_\nu$ [GeV]", fontsize=LABEL_FONTSIZE)
+    ax_ratio.set_ylabel(r"$\Delta\Phi/\Phi$", fontsize=LABEL_FONTSIZE)
     ax_ratio.grid(alpha=0.25)
+    ax_ratio.tick_params(labelsize=TICK_FONTSIZE)
 
 
 def parse_args():
@@ -175,7 +183,7 @@ def write_comparison_figure(
     emax_gev,
     log_scale,
 ):
-    fig = plt.figure(figsize=(13, 8))
+    fig = plt.figure(figsize=FIGSIZE)
     grid = fig.add_gridspec(2, 2, height_ratios=[3.0, 1.0], hspace=0.08, wspace=0.22)
     fhc_flux = fig.add_subplot(grid[0, 0])
     rhc_flux = fig.add_subplot(grid[0, 1], sharey=fhc_flux)
@@ -186,16 +194,12 @@ def write_comparison_figure(
     plot_mode(rhc_flux, rhc_ratio, "RHC", rhc_dk2nu, rhc_globes, emax_gev, log_scale=log_scale)
     rhc_flux.set_ylabel("")
 
-    fig.suptitle(
-        r"Flux ND: intégration dk2nu sur la source, "
-        r"$\Phi(E_i)=\sum_z w(E_i,z)$",
-        fontsize=13,
-    )
-    fig.suptitle(
-        r"ND flux: absolute dk2nu integrated over source, "
-        r"$d\Phi/dE=\sum_z d\Phi(E_i,z)/dE$",
-        fontsize=13,
-    )
+    if not log_scale:
+        fig.suptitle(
+            r"Flux ND : comparaison GLoBES et dk2nu intégré sur la source, "
+            r"$d\Phi/dE=\sum_z d\Phi(E_i,z)/dE$",
+            fontsize=TITLE_FONTSIZE,
+        )
     outpath.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(outpath, dpi=220, bbox_inches="tight")
     plt.close(fig)

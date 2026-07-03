@@ -11,7 +11,7 @@ import pandas as pd
 
 
 DEFAULT_INPUT = Path("data/dune_nd/minimal_onaxis/point_70/plots_validation/fig4_nd_source_line_iss23_vs_active3nu.csv")
-DEFAULT_OUT = Path("figures/dune_nd/point_70/fig4/fig4_nd_source_line_iss23_vs_active3nu.png")
+DEFAULT_OUT = Path("figures/dune_nd/iss23/construct23_point70/fig4/fig4_nd_source_line_iss23_vs_active3nu.png")
 EXPOSURE_YEARS = 6.5
 ISS_COLORS = {
     "black": "0.35",
@@ -79,25 +79,36 @@ def difference_limits(values):
     span = max(hi - lo, 1.0e-6)
     pad = 0.2 * span
     return lo - pad, hi + pad
+
+
+def residual_limits(values, x_values=None, x_min=None):
+    finite = np.asarray(values, dtype=float)
+    if x_values is not None and x_min is not None:
+        x = np.asarray(x_values, dtype=float)
+        finite = finite[x >= x_min]
+    return difference_limits(finite)
     
 
-def draw_pair(ax, rax, df, panel, title, model_label, point_label, app=True, anti=False):
-    differences = []
+def draw_pair(ax, rax, df, panel, title, model_label, point_label, app=True, anti=False, bottom_mode="signal-difference"):
+    residual_values = []
+    black_curve = None
     for _, components, color, label in panel_stacks(app=app, anti=anti):
         globes = combined_component(df, panel, components, "globes_events")
         iss = combined_component(df, panel, components, "iss23_events")
         step(ax, globes, "globes_events", color=color, linewidth=1.3, label=label)
         step(ax, iss, "iss23_events", color=ISS_COLORS[color], linewidth=1.2, linestyle="--")
 
-        g = globes["globes_events"].to_numpy(dtype=float)
-        y = iss["iss23_events"].to_numpy(dtype=float)
-        difference = np.divide(y - g, g, out=np.zeros_like(y), where=np.abs(g) > 1.0e-18)
-        differences.extend(difference[np.isfinite(difference)].tolist())
-        rdata = globes[["Erec_GeV"]].copy()
-        rdata["relative_difference"] = difference
-        step(rax, rdata, "relative_difference", color=ISS_COLORS[color], linewidth=1.0)
+        if bottom_mode == "summed-residuals":
+            g = globes["globes_events"].to_numpy(dtype=float)
+            y = iss["iss23_events"].to_numpy(dtype=float)
+            residual = np.divide(y - g, g, out=np.zeros_like(y), where=np.abs(g) > 1.0e-18)
+            residual_values.extend(residual[np.isfinite(residual)].tolist())
+            rdata = globes[["Erec_GeV"]].copy()
+            rdata["summed_residual"] = residual
+            step(rax, rdata, "summed_residual", color=ISS_COLORS[color], linewidth=1.0)
 
         if color == "black":
+            black_curve = (globes, iss)
             yerr = np.sqrt(np.maximum(globes["globes_events"].to_numpy(), 0.0))
             ax.errorbar(globes["Erec_GeV"], globes["globes_events"], yerr=yerr, fmt="none", ecolor="black", elinewidth=0.7)
 
@@ -114,7 +125,7 @@ def draw_pair(ax, rax, df, panel, title, model_label, point_label, app=True, ant
         title
         + f"\n{model_label}, {EXPOSURE_YEARS:g} yr/mode"
         + f"\nLND = 574 m, ldec = 194 m"
-        + f"\nSolid: 3nu active {point_label}"
+        + "\nSolid: active 3nu bloc"
         + f"\nDashed: ISS(2,3) {point_label}",
         transform=ax.transAxes,
         fontsize=6.2,
@@ -124,10 +135,50 @@ def draw_pair(ax, rax, df, panel, title, model_label, point_label, app=True, ant
     ax.legend(loc="upper right", fontsize=7, frameon=False, bbox_to_anchor=(0.98, 0.63))
 
     rax.axhline(0.0, color="black", linewidth=0.7)
+    if bottom_mode in ("signal-difference", "signal-residual"):
+        signal = panel_component(df, panel, "signal")
+        signal_3nu = signal["globes_events"].to_numpy(dtype=float)
+        signal_iss = signal["iss23_events"].to_numpy(dtype=float)
+        rdata = signal[["Erec_GeV"]].copy()
+        if bottom_mode == "signal-difference":
+            signal_residual = signal_iss - signal_3nu
+            rdata["signal_residual"] = signal_residual
+            step(rax, rdata, "signal_residual", color=ISS_COLORS["black"], linewidth=1.1)
+            rax.set_ylim(*difference_limits(signal_residual))
+            rax.set_ylabel(r"$\Delta N_{\rm sig}$", fontsize=8)
+        else:
+            signal_residual = np.divide(
+                signal_iss - signal_3nu,
+                signal_3nu,
+                out=np.full_like(signal_iss, np.nan),
+                where=np.abs(signal_3nu) > 1.0e-18,
+            )
+            rdata["signal_residual"] = signal_residual
+            if app:
+                rdata = rdata[rdata["Erec_GeV"] >= 1.0]
+                signal_residual = rdata["signal_residual"].to_numpy(dtype=float)
+            step(rax, rdata, "signal_residual", color=ISS_COLORS["black"], linewidth=1.1)
+            rax.set_ylim(
+                *residual_limits(
+                    signal_residual,
+                )
+            )
+            rax.set_ylabel(r"$\Delta N_{\rm sig}/N_{\rm sig}$", fontsize=8)
+    elif bottom_mode == "black-curve-residual":
+        globes, iss = black_curve
+        g = globes["globes_events"].to_numpy(dtype=float)
+        y = iss["iss23_events"].to_numpy(dtype=float)
+        residual = np.divide(y - g, g, out=np.full_like(y, np.nan), where=np.abs(g) > 1.0e-18)
+        rdata = globes[["Erec_GeV"]].copy()
+        rdata["black_curve_residual"] = residual
+        step(rax, rdata, "black_curve_residual", color=ISS_COLORS["black"], linewidth=1.1)
+        rax.set_ylim(*difference_limits(residual))
+        rax.set_ylabel(r"$\Delta N/N$", fontsize=8)
+    else:
+        rax.set_ylim(*difference_limits(residual_values))
+        rax.set_ylabel(r"$\Delta N/N$", fontsize=8)
     rax.set_xlim(0.5, 8.0)
-    rax.set_ylim(*difference_limits(differences))
     rax.set_xlabel("Reconstructed Energy (GeV)", fontsize=10, fontweight="bold")
-    rax.set_ylabel(r"$\Delta N/N$", fontsize=8)
     rax.tick_params(direction="in", top=True, right=True, labelsize=8)
     rax.minorticks_on()
     rax.tick_params(which="minor", direction="in", top=True, right=True)
@@ -217,12 +268,11 @@ def plot_raw_probabilities(prob_csv, out_path):
             if col == 0:
                 ax.set_ylabel(ylabel, fontsize=10)
             if row == len(PROB_CHANNELS) - 1:
-                ax.set_xlabel("Energy used by C (GeV)", fontsize=9)
+                ax.set_xlabel(r"$E_\nu$ [GeV]", fontsize=9)
             if row == 0 and col == 0:
                 ax.legend(loc="best", fontsize=7, frameon=False)
 
-    fig.suptitle(f"Raw source-averaged probabilities used by C - point {point_id}, source={source_model}", fontsize=12, fontweight="bold")
-    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=220)
     plt.close(fig)
@@ -233,6 +283,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Plot DUNE ND source-line Fig.4-like spectra vs ISS(2,3).")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument(
+        "--bottom-mode",
+        choices=("signal-difference", "signal-residual", "black-curve-residual", "summed-residuals"),
+        default="signal-difference",
+        help="Content of the lower panels.",
+    )
     return parser.parse_args()
 
 
@@ -251,10 +307,10 @@ def main():
         "FHC_dis": (fig.add_subplot(grid[2, 0]), fig.add_subplot(grid[3, 0])),
         "RHC_dis": (fig.add_subplot(grid[2, 1]), fig.add_subplot(grid[3, 1])),
     }
-    draw_pair(*axes["FHC_app"], df, "FHC_app", r"$\nu_e$ Appearance", model_label, point_label, app=True, anti=False)
-    draw_pair(*axes["RHC_app"], df, "RHC_app", r"$\bar{\nu}_e$ Appearance", model_label, point_label, app=True, anti=True)
-    draw_pair(*axes["FHC_dis"], df, "FHC_dis", r"$\nu_\mu$ Disappearance", model_label, point_label, app=False, anti=False)
-    draw_pair(*axes["RHC_dis"], df, "RHC_dis", r"$\bar{\nu}_\mu$ Disappearance", model_label, point_label, app=False, anti=True)
+    draw_pair(*axes["FHC_app"], df, "FHC_app", r"$\nu_e$ Appearance", model_label, point_label, app=True, anti=False, bottom_mode=args.bottom_mode)
+    draw_pair(*axes["RHC_app"], df, "RHC_app", r"$\bar{\nu}_e$ Appearance", model_label, point_label, app=True, anti=True, bottom_mode=args.bottom_mode)
+    draw_pair(*axes["FHC_dis"], df, "FHC_dis", r"$\nu_\mu$ Disappearance", model_label, point_label, app=False, anti=False, bottom_mode=args.bottom_mode)
+    draw_pair(*axes["RHC_dis"], df, "RHC_dis", r"$\bar{\nu}_\mu$ Disappearance", model_label, point_label, app=False, anti=True, bottom_mode=args.bottom_mode)
     fig.subplots_adjust(left=0.09, right=0.98, bottom=0.07, top=0.97)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=240)

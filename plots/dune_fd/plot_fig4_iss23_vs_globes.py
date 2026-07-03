@@ -11,7 +11,7 @@ import pandas as pd
 
 
 DEFAULT_INPUT = Path("data/dune_nd/minimal_onaxis/point_70/plots_validation/fig4_fd_iss23_vs_globes.csv")
-DEFAULT_OUT = Path("figures/dune_fd/point_70/fig4/fig4_fd_iss23_vs_globes.png")
+DEFAULT_OUT = Path("figures/dune_fd/iss23/construct23_point70/fig4/fig4_fd_iss23_vs_globes.png")
 ISS_COLORS = {
     "black": "0.35",
     "blue": "deepskyblue",
@@ -99,7 +99,7 @@ def draw_pair(ax, rax, df, panel, title, ylim, app=True, anti=False):
     ax.text(
         0.52,
         0.88,
-        title + f"\nSolid: {reference_label(df)}\nDashed: ISS(2,3) point 70",
+        title + "\nSolid: active 3nu bloc\nDashed: ISS(2,3) pt 70",
         transform=ax.transAxes,
         fontsize=7,
         fontweight="bold",
@@ -140,11 +140,16 @@ def print_checks(df):
         g = reference[ref_col].to_numpy()
         y = iss["iss23_events"].to_numpy()
         mask = g > 1e-9
+        if not np.any(mask):
+            print(f"  {panel}: aucune reference non nulle; check ignore")
+            continue
         rel = np.zeros_like(g)
         rel[mask] = (y[mask] - g[mask]) / g[mask]
+        sum_g = np.sum(g)
+        sum_rel = (np.sum(y) - sum_g) / sum_g if sum_g > 0.0 else np.nan
         print(
             f"  {panel}: max |rel| = {np.max(np.abs(rel[mask])):.3e}, "
-            f"sum rel = {(np.sum(y) - np.sum(g)) / np.sum(g):.3e}"
+            f"sum rel = {sum_rel:.3e}"
         )
 
 

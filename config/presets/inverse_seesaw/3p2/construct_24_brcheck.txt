@@ -1,0 +1,7 @@
+include = construct_24.txt
+
+inverse_kept_points_dir = data/inverse_seesaw/3p2/inverse_construct_24_brcheck
+inverse_clear_kept_points_dir = 1
+output_inverse_construct_24_csv_path = data/inverse_seesaw/3p2/inverse_construct_24_brcheck/inverse_construct_24_kept_points.csv
+
+inverse_br_muegamma_max = 1.5e-13

@@ -1,6 +1,7 @@
 import argparse
 import os
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor
 
 ROOT = Path(__file__).resolve().parents[2]
 MPLCONFIGDIR = ROOT / ".matplotlib_cache"
@@ -14,15 +15,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import LogNorm
+from matplotlib.colors import Normalize
 
 
 POINTS_CSV = Path("data/inverse_seesaw/3p1/inverse_construct_23_kept_points/inverse_construct_23_kept_points.csv")
 GLOBES = Path("data/dune/2103.04797v2/dune_globes")
 FLUX_DIR = Path("data/dune/flux")
-SOURCE_PROFILE_FHC = Path("data/dune/dk2nu/source_profile_z_FHC_ND.csv")
-SOURCE_PROFILE_RHC = Path("data/dune/dk2nu/source_profile_z_RHC_ND.csv")
-OUT = Path("figures/dune_nd/scan_maps/iss23_active3nu_max_event_ratio_map.png")
+SOURCE_PROFILE_FHC = Path("data/dune/dk2nu/flux_z_FHC_ND_raw.csv")
+SOURCE_PROFILE_RHC = Path("data/dune/dk2nu/flux_z_RHC_ND_raw.csv")
+OUT = Path("figures/dune_nd/iss23/scan_maps/iss23_active3nu_max_event_ratio_map.png")
 OUT_CSV = Path("data/dune_nd/scan_maps/iss23_active3nu_max_event_ratio_map.csv")
 
 AVOGADRO = 6.02214076e23
@@ -52,6 +53,19 @@ def read_flux(path: Path) -> pd.DataFrame:
         engine="python",
     )
     return df.apply(pd.to_numeric, errors="coerce").dropna(subset=["E_GeV"])
+
+def read_dk2nu_flux_from_z(path: Path) -> pd.DataFrame:
+    table = pd.read_csv(path)
+    for column in ["E_GeV_bin_low", "E_GeV_bin_high", "weight"]:
+        table[column] = pd.to_numeric(table[column], errors="coerce")
+    table = table.dropna(subset=["flavor", "E_GeV_bin_low", "E_GeV_bin_high", "weight"])
+    grouped = table.groupby(["flavor", "E_GeV_bin_low", "E_GeV_bin_high"], as_index=False)["weight"].sum()
+    grouped["E_GeV"] = 0.5 * (grouped["E_GeV_bin_low"] + grouped["E_GeV_bin_high"])
+    out = grouped.pivot_table(index="E_GeV", columns="flavor", values="weight", aggfunc="sum").reset_index()
+    for flavor in FLAVORS:
+        if flavor not in out:
+            out[flavor] = 0.0
+    return out[["E_GeV", *FLAVORS]].sort_values("E_GeV")
 
 
 def read_xsec(path: Path) -> pd.DataFrame:
@@ -91,15 +105,35 @@ def source_weights(profile: dict[tuple[str, float, float], tuple[np.ndarray, np.
 
 
 def build_mixing(df: pd.DataFrame) -> np.ndarray:
-    u = np.zeros((len(df), 4, 4), dtype=float)
+    u = np.zeros((len(df), 4, 4), dtype=complex)
+    has_complex_columns = all(
+        f"U_solver_re_{r + 1}{c + 1}" in df.columns and f"U_solver_im_{r + 1}{c + 1}" in df.columns
+        for r in range(4)
+        for c in range(4)
+    )
     for r in range(4):
         for c in range(4):
-            u[:, r, c] = df[f"U_solver_{r + 1}{c + 1}"].to_numpy(dtype=float)
+            if has_complex_columns:
+                re = df[f"U_solver_re_{r + 1}{c + 1}"].to_numpy(dtype=float)
+                im = df[f"U_solver_im_{r + 1}{c + 1}"].to_numpy(dtype=float)
+                u[:, r, c] = re + 1j * im
+            else:
+                u[:, r, c] = df[f"U_solver_{r + 1}{c + 1}"].to_numpy(dtype=float)
     return u
 
 
-def probability_at_baseline(u: np.ndarray, masses: np.ndarray, alpha: int, beta: int, energy: float, baseline_km: float, n_states: int) -> np.ndarray:
+def probability_at_baseline(
+    u: np.ndarray,
+    masses: np.ndarray,
+    alpha: int,
+    beta: int,
+    energy: float,
+    baseline_km: float,
+    n_states: int,
+    antineutrino: bool = False,
+) -> np.ndarray:
     p = np.ones(u.shape[0], dtype=float) if alpha == beta else np.zeros(u.shape[0], dtype=float)
+    im_sign = -1.0 if antineutrino else 1.0
     for i in range(n_states):
         mi2 = masses[:, i]
         for j in range(i + 1, n_states):
@@ -107,11 +141,46 @@ def probability_at_baseline(u: np.ndarray, masses: np.ndarray, alpha: int, beta:
             phase = PHASE_COEFF * (mj2 - mi2) * baseline_km / energy
             a = (
                 u[:, alpha, i]
-                * u[:, beta, i]
-                * u[:, alpha, j]
+                * np.conjugate(u[:, beta, i])
+                * np.conjugate(u[:, alpha, j])
                 * u[:, beta, j]
             )
             p -= 4.0 * np.real(a) * np.sin(phase) ** 2
+            p += im_sign * 2.0 * np.imag(a) * np.sin(2.0 * phase)
+    return np.clip(p, 0.0, 1.0)
+
+
+def probability_source_average_channel(
+    u: np.ndarray,
+    masses: np.ndarray,
+    alpha: int,
+    beta: int,
+    flavor: str,
+    energy: float,
+    profile: dict[tuple[str, float, float], tuple[np.ndarray, np.ndarray]],
+    n_states: int,
+) -> np.ndarray:
+    z_values, weights = source_weights(profile, flavor, energy)
+    baselines_km = np.maximum(0.0, BASELINE_KM - z_values * 1.0e-3)
+    antineutrino = flavor.endswith("bar")
+    im_sign = -1.0 if antineutrino else 1.0
+    p = np.ones(u.shape[0], dtype=float) if alpha == beta else np.zeros(u.shape[0], dtype=float)
+
+    for i in range(n_states):
+        mi2 = masses[:, i]
+        for j in range(i + 1, n_states):
+            mj2 = masses[:, j]
+            phase = PHASE_COEFF * (mj2 - mi2)[:, None] * baselines_km[None, :] / energy
+            avg_sin2 = np.sin(phase) ** 2 @ weights
+            avg_sin2phase = np.sin(2.0 * phase) @ weights
+            a = (
+                u[:, alpha, i]
+                * np.conjugate(u[:, beta, i])
+                * np.conjugate(u[:, alpha, j])
+                * u[:, beta, j]
+            )
+            p -= 4.0 * np.real(a) * avg_sin2
+            p += im_sign * 2.0 * np.imag(a) * avg_sin2phase
     return np.clip(p, 0.0, 1.0)
 
 
@@ -125,19 +194,12 @@ def probability_source_average(
     profile: dict[tuple[str, float, float], tuple[np.ndarray, np.ndarray]],
     n_states: int,
 ) -> np.ndarray:
-    z_values, weights = source_weights(profile, flavor, energy)
+    if beta is not None:
+        return probability_source_average_channel(u, masses, alpha, beta, flavor, energy, profile, n_states)
     out = np.zeros(u.shape[0], dtype=float)
-    for z_m, weight in zip(z_values, weights):
-        baseline_km = max(0.0, BASELINE_KM - z_m * 1.0e-3)
-        if beta is None:
-            p = np.zeros(u.shape[0], dtype=float)
-            for active_beta in range(3):
-                p += probability_at_baseline(u, masses, alpha, active_beta, energy, baseline_km, n_states)
-            p = np.clip(p, 0.0, 1.0)
-        else:
-            p = probability_at_baseline(u, masses, alpha, beta, energy, baseline_km, n_states)
-        out += weight * p
-    return out
+    for active_beta in range(3):
+        out += probability_source_average_channel(u, masses, alpha, active_beta, flavor, energy, profile, n_states)
+    return np.clip(out, 0.0, 1.0)
 
 
 def xsec_flavor(final_flavor: str, interaction: str) -> str:
@@ -242,8 +304,8 @@ def compute_scan(df: pd.DataFrame, e_min: float, e_max: float, n_bins: int) -> p
     width = (e_max - e_min) / n_bins
 
     fluxes = {
-        "FHC": read_flux(FLUX_DIR / "flux_dune_neutrino_ND_globes.txt"),
-        "RHC": read_flux(FLUX_DIR / "flux_dune_antineutrino_ND_globes.txt"),
+        "FHC": read_dk2nu_flux_from_z(SOURCE_PROFILE_FHC),
+        "RHC": read_dk2nu_flux_from_z(SOURCE_PROFILE_RHC),
     }
     profiles = {
         "FHC": read_source_profile(SOURCE_PROFILE_FHC),
@@ -288,11 +350,28 @@ def compute_scan(df: pd.DataFrame, e_min: float, e_max: float, n_bins: int) -> p
     return out
 
 
-def plot_map(summary: pd.DataFrame, outpath: Path) -> None:
+def compute_scan_worker(payload: tuple[pd.DataFrame, float, float, int]) -> pd.DataFrame:
+    df, e_min, e_max, n_bins = payload
+    return compute_scan(df, e_min, e_max, n_bins)
+
+
+def split_dataframe(df: pd.DataFrame, chunk_size: int) -> list[pd.DataFrame]:
+    if chunk_size <= 0 or chunk_size >= len(df):
+        return [df]
+    return [df.iloc[start:start + chunk_size].copy() for start in range(0, len(df), chunk_size)]
+
+
+def plot_map(summary: pd.DataFrame, outpath: Path, x_log: bool = False) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11.0, 8.8), sharex=True, sharey=True)
     values = summary[[f"{panel}_max_abs_percent" for panel in PANELS]].to_numpy(dtype=float)
-    positive = values[np.isfinite(values) & (values > 0.0)]
-    norm = LogNorm(vmin=max(float(np.nanmin(positive)), 1.0e-5), vmax=max(float(np.nanmax(positive)), 1.0e-4)) if positive.size else None
+    finite = values[np.isfinite(values)]
+    norm = None
+    if finite.size:
+        vmin = float(np.nanmin(finite))
+        vmax = float(np.nanmax(finite))
+        if vmax <= vmin:
+            vmax = vmin + 1.0e-12
+        norm = Normalize(vmin=vmin, vmax=vmax)
     labels = {
         "FHC_app": r"FHC $\nu_e$ appearance",
         "RHC_app": r"RHC $\bar{\nu}_e$ appearance",
@@ -316,6 +395,8 @@ def plot_map(summary: pd.DataFrame, outpath: Path) -> None:
         ax.grid(alpha=0.25, which="both")
         ax.set_xlabel(r"$\Delta m^2_{41}$ [eV$^2$]")
         ax.set_ylabel(r"$\|\zeta\|$")
+        if x_log:
+            ax.set_xscale("log")
 
     if image is not None:
         cbar = fig.colorbar(image, ax=axes.ravel().tolist(), pad=0.02)
@@ -339,6 +420,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--e-max-GeV", type=float, default=8.0)
     parser.add_argument("--e-bins", type=int, default=30)
     parser.add_argument("--max-points", type=int, default=0, help="Optional debug limit after filtering.")
+    parser.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1), help="Parallel worker count for full scans.")
+    parser.add_argument("--chunk-size", type=int, default=1200, help="Number of scan points per parallel chunk.")
+    parser.add_argument("--x-log", action="store_true", help="Use a logarithmic x-axis for dm41 scan maps.")
     return parser.parse_args()
 
 
@@ -357,10 +441,17 @@ def main() -> None:
     if selected.empty:
         raise RuntimeError("Aucun point pmns_pass=1 et eta_pass=1 exploitable dans le CSV.")
 
-    summary = compute_scan(selected, args.e_min_GeV, args.e_max_GeV, args.e_bins)
+    if args.workers > 1 and len(selected) > args.chunk_size:
+        chunks = split_dataframe(selected, args.chunk_size)
+        print(f"Calcul parallele: {len(chunks)} blocs, {args.workers} workers, {len(selected)} points")
+        payloads = [(chunk, args.e_min_GeV, args.e_max_GeV, args.e_bins) for chunk in chunks]
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            summary = pd.concat(pool.map(compute_scan_worker, payloads), ignore_index=True)
+    else:
+        summary = compute_scan(selected, args.e_min_GeV, args.e_max_GeV, args.e_bins)
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(args.out_csv, index=False)
-    plot_map(summary, args.out)
+    plot_map(summary, args.out, x_log=args.x_log)
     print(f"Points utilises: {len(summary)}")
     print(f"CSV sauvegarde: {args.out_csv.resolve()}")
     print(f"Figure sauvegardee: {args.out.resolve()}")

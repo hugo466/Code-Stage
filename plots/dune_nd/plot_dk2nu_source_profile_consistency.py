@@ -332,8 +332,7 @@ def plot_consistency(summary: pd.DataFrame, out_path: Path) -> None:
             rax.set_title(r"$(ROOT-CSV)/CSV$")
     for ax in axes[-1]:
         ax.set_xlabel("Decay position z (m)")
-    fig.suptitle("Strict dk2nu source-profile consistency: ROOT parent/flavor/z vs stored source_profile_z", fontsize=13, fontweight="bold")
-    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
+    fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=230, bbox_inches="tight")
     plt.close(fig)

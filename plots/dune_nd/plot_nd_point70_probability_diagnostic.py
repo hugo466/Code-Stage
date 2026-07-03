@@ -21,7 +21,7 @@ import numpy as np
 
 POINT_PATH = Path("data/inverse_seesaw/3p1/inverse_construct_23_kept_points/70.txt")
 OUT_CSV = Path("data/dune_nd/minimal_onaxis/point_70/plots_validation/nd_point70_probability_diagnostic_point_source.csv")
-OUT_FIG = Path("figures/dune_nd/point_70/probabilities/nd_point70_probability_diagnostic_point_source.png")
+OUT_FIG = Path("figures/dune_nd/iss23/construct23_point70/probabilities/nd_point70_probability_diagnostic_point_source.png")
 
 BASELINE_KM = 0.574
 E_MIN_GEV = 0.5

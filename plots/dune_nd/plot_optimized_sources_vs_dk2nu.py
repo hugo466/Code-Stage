@@ -1,15 +1,16 @@
 #!/usr/bin/env python
-"""Plot optimized point/line source models against dk2nu.
+"""Fit point/uniform ND source models to the dk2nu source-averaged curve.
 
-Curves:
-- dotted: optimized point source, fixed L_eff = 525 m
-- blue: optimized line source, uniform z in [0, 120] m
-- red: dk2nu weighted source
+The fitted observable is the Fig.4-like total ratio N_ISS/N_3nu in each
+panel.  Candidate spectra are generated with the C code, so the event
+calculation, active-3nu benchmark, component definitions, fluxes and xsecs stay
+identical to the production pipeline.
 """
 
 from __future__ import annotations
 
 import argparse
+import subprocess
 from pathlib import Path
 
 import matplotlib
@@ -20,96 +21,265 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-
-BASE = Path("data/dune_nd/minimal_onaxis/point_70")
-DEFAULT_POINT = BASE / "point_source_length_scan/point_L0525.00.csv"
-DEFAULT_LINE = BASE / "source_model_scan/uniform_z000.00_l120.00.csv"
-DEFAULT_DK2NU = BASE / "plots_validation/fig4_nd_dk2nu_iss23_vs_active3nu.csv"
-DEFAULT_OUT = Path("figures/dune_nd/point_70/source_models/source_scan_best_vs_dk2nu.png")
-
-PANELS = ["FHC_app", "RHC_app", "FHC_dis", "RHC_dis"]
-PANEL_COMPONENTS = {
-    "FHC_app": ["nc", "numu", "beam", "signal"],
-    "RHC_app": ["nc", "numu", "beam", "signal"],
-    "FHC_dis": ["nc", "wrong_mu", "tau", "signal"],
-    "RHC_dis": ["nc", "wrong_mu", "tau", "signal"],
-}
-PANEL_TITLES = {
-    "FHC_app": r"FHC $\nu_e$ app.",
-    "RHC_app": r"RHC $\bar{\nu}_e$ app.",
-    "FHC_dis": r"FHC $\nu_\mu$ dis.",
-    "RHC_dis": r"RHC $\bar{\nu}_\mu$ dis.",
-}
+from plot_nd_source_model_comparison import (
+    DEFAULT_BASE,
+    DEFAULT_INPUTS,
+    MODEL_COLORS,
+    MODEL_STYLES,
+    PANEL_TITLES,
+    PANELS,
+    read_inputs,
+    total_panel,
+)
 
 
-def total_ratio(path: Path) -> dict[str, pd.DataFrame]:
-    if not path.exists():
-        raise FileNotFoundError(path)
-    df = pd.read_csv(path)
-    required = {"panel", "component", "Erec_GeV", "globes_events", "iss23_events"}
-    missing = required.difference(df.columns)
-    if missing:
-        raise ValueError(f"{path}: colonnes manquantes: {sorted(missing)}")
+ROOT = Path(__file__).resolve().parents[2]
+APP = ROOT / "bin" / "app.exe"
+TMP_CONFIG_DIR = ROOT / "config" / "presets" / "dune" / "nd" / "_fit_tmp"
+TMP_DATA_DIR = DEFAULT_BASE / "_source_fit_tmp"
 
-    out: dict[str, pd.DataFrame] = {}
+DEFAULT_OUT = Path("figures/dune_nd/iss23/construct23_point70/source_models/source_scan_best_vs_dk2nu_refit.png")
+DEFAULT_OLD_OUT = Path("figures/dune_nd/iss23/construct23_point70/source_models/source_scan_best_vs_dk2nu_old_refit.png")
+DEFAULT_CSV = DEFAULT_BASE / "source_scan_best_vs_dk2nu_old_refit.csv"
+DEFAULT_SCORE_CSV = DEFAULT_BASE / "source_scan_best_vs_dk2nu_old_refit_scores.csv"
+
+DETECTOR_DISTANCE_M = 574.0
+POINT_COARSE = np.arange(450.0, 701.0, 5.0)
+UNIFORM_Z_COARSE_STEP_M = 10.0
+UNIFORM_Z_REFINE_HALF_WIDTH_M = 8.0
+UNIFORM_Z_REFINE_STEP_M = 1.0
+REFINE_HALF_WIDTH_M = 6.0
+REFINE_STEP_M = 0.5
+UNIFORM_Z_ALLOWED_MIN_M = 0.0
+UNIFORM_Z_ALLOWED_MAX_M = 194.0
+UNIFORM_Z_BINS = 80
+
+
+def ensure_app() -> None:
+    if APP.exists():
+        return
+    subprocess.run(["mingw32-make", "build"], cwd=ROOT, check=True)
+
+
+def write_config(
+    model: str,
+    detector_distance_m: float,
+    out_csv: Path,
+    *,
+    z_min_m: float = UNIFORM_Z_ALLOWED_MIN_M,
+    z_max_m: float = UNIFORM_Z_ALLOWED_MAX_M,
+) -> Path:
+    TMP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    rel_out = out_csv.resolve().relative_to(ROOT).as_posix()
+    if model == "uniform":
+        cfg = TMP_CONFIG_DIR / f"{model}_z{z_min_m:.3f}_{z_max_m:.3f}.ini"
+    else:
+        cfg = TMP_CONFIG_DIR / f"{model}_L{detector_distance_m:.3f}.ini"
+    source_z_bins = 1 if model == "point" else UNIFORM_Z_BINS
+    baseline_model = "fixed" if model == "point" else "source_line"
+    source_model = "point" if model == "point" else "uniform"
+    text = f"""include = ../fig4_point70_source_line.ini
+
+[beam]
+baseline_model = {baseline_model}
+source_model = {source_model}
+detector_distance_m = {detector_distance_m:.10g}
+source_z_start_m = {z_min_m:.10g}
+decay_pipe_length_m = {z_max_m - z_min_m:.10g}
+source_z_bins = {source_z_bins}
+
+[output]
+spectrum_pred_csv = {rel_out}
+"""
+    cfg.write_text(text, encoding="utf-8")
+    return cfg
+
+
+def run_candidate(
+    model: str,
+    detector_distance_m: float,
+    *,
+    z_min_m: float = UNIFORM_Z_ALLOWED_MIN_M,
+    z_max_m: float = UNIFORM_Z_ALLOWED_MAX_M,
+) -> pd.DataFrame:
+    TMP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if model == "uniform":
+        out_csv = TMP_DATA_DIR / f"{model}_z{z_min_m:.3f}_{z_max_m:.3f}.csv"
+    else:
+        out_csv = TMP_DATA_DIR / f"{model}_L{detector_distance_m:.3f}.csv"
+    if not out_csv.exists():
+        cfg = write_config(model, detector_distance_m, out_csv, z_min_m=z_min_m, z_max_m=z_max_m)
+        subprocess.run([str(APP), str(cfg)], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
+    return pd.read_csv(out_csv)
+
+
+def target_curves(dk2nu_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    return {panel: total_panel(dk2nu_df, panel) for panel in PANELS}
+
+
+def score_frame(candidate: pd.DataFrame, target: dict[str, pd.DataFrame]) -> float:
+    pieces: list[np.ndarray] = []
     for panel in PANELS:
-        selected = df[(df["panel"] == panel) & (df["component"].isin(PANEL_COMPONENTS[panel]))]
-        grouped = (
-            selected.groupby("Erec_GeV", as_index=False)[["globes_events", "iss23_events"]]
-            .sum()
-            .sort_values("Erec_GeV")
-        )
-        grouped["ratio"] = np.divide(
-            grouped["iss23_events"].to_numpy(dtype=float),
-            grouped["globes_events"].to_numpy(dtype=float),
-            out=np.full(len(grouped), np.nan, dtype=float),
-            where=grouped["globes_events"].to_numpy(dtype=float) > 0.0,
-        )
-        out[panel] = grouped
-    return out
+        cand = total_panel(candidate, panel)[["Erec_GeV", "ratio_iss_over_3nu"]]
+        ref = target[panel][["Erec_GeV", "ratio_iss_over_3nu"]]
+        merged = cand.merge(ref, on="Erec_GeV", suffixes=("_cand", "_dk2nu"))
+        if merged.empty:
+            continue
+        delta = merged["ratio_iss_over_3nu_cand"].to_numpy(dtype=float) - merged["ratio_iss_over_3nu_dk2nu"].to_numpy(dtype=float)
+        pieces.append(delta)
+    if not pieces:
+        return float("inf")
+    residuals = np.concatenate(pieces)
+    return float(np.sqrt(np.mean(residuals * residuals)))
 
 
-def max_abs_delta(candidate: pd.DataFrame, reference: pd.DataFrame, emin: float) -> float:
-    merged = candidate[["Erec_GeV", "ratio"]].merge(
-        reference[["Erec_GeV", "ratio"]],
-        on="Erec_GeV",
-        suffixes=("_candidate", "_reference"),
+def scan_model(model: str, grid: np.ndarray, target: dict[str, pd.DataFrame]) -> tuple[float, pd.DataFrame, pd.DataFrame]:
+    rows = []
+    best_l = None
+    best_score = float("inf")
+    best_frame = None
+    for distance in grid:
+        frame = run_candidate(model, float(distance))
+        score = score_frame(frame, target)
+        rows.append({"model": model, "detector_distance_m": float(distance), "score_rms_ratio": score})
+        if score < best_score:
+            best_l = float(distance)
+            best_score = score
+            best_frame = frame
+
+    if best_l is None or best_frame is None:
+        raise RuntimeError(f"Aucun candidat valide pour {model}")
+
+    refine = np.arange(
+        best_l - REFINE_HALF_WIDTH_M,
+        best_l + REFINE_HALF_WIDTH_M + 0.5 * REFINE_STEP_M,
+        REFINE_STEP_M,
     )
-    merged = merged[merged["Erec_GeV"] > emin]
-    if merged.empty:
-        return float("nan")
-    return float(np.nanmax(np.abs(merged["ratio_candidate"] - merged["ratio_reference"])))
+    for distance in refine:
+        frame = run_candidate(model, float(distance))
+        score = score_frame(frame, target)
+        rows.append({"model": model, "detector_distance_m": float(distance), "score_rms_ratio": score})
+        if score < best_score:
+            best_l = float(distance)
+            best_score = score
+            best_frame = frame
+
+    return best_l, best_frame, pd.DataFrame(rows)
 
 
-def plot(point: Path, line: Path, dk2nu: Path, out: Path, emin_score: float) -> None:
-    curves = {
-        "point source opt. L=525 m": total_ratio(point),
-        "line source opt. [0,120] m": total_ratio(line),
-        "dk2nu weighted": total_ratio(dk2nu),
-    }
-    styles = {
-        "point source opt. L=525 m": dict(color="0.35", linestyle=":", linewidth=2.0),
-        "line source opt. [0,120] m": dict(color="#1f77b4", linestyle="-", linewidth=1.9),
-        "dk2nu weighted": dict(color="#d62728", linestyle="-", linewidth=1.9),
-    }
+def valid_uniform_bounds(z_min_m: float, z_max_m: float) -> bool:
+    return (
+        UNIFORM_Z_ALLOWED_MIN_M <= z_min_m < z_max_m <= UNIFORM_Z_ALLOWED_MAX_M
+        and z_max_m - z_min_m >= 1.0
+    )
 
-    fig, axes = plt.subplots(2, 2, figsize=(11.0, 7.6), sharex=True)
-    for ax, panel in zip(axes.flat, PANELS):
-        ref = curves["dk2nu weighted"][panel]
-        for label, panel_curves in curves.items():
-            data = panel_curves[panel]
-            ax.step(data["Erec_GeV"], data["ratio"], where="mid", label=label, **styles[label])
 
-        point_delta = max_abs_delta(curves["point source opt. L=525 m"][panel], ref, emin_score)
-        line_delta = max_abs_delta(curves["line source opt. [0,120] m"][panel], ref, emin_score)
-        ax.axvspan(emin_score, 8.0, color="0.92", alpha=0.55, zorder=-10)
-        ax.set_title(
-            f"{PANEL_TITLES[panel]}",#\n"
-            # f"E>{emin_score:g} GeV: max |Delta| point={point_delta:.2e}, line={line_delta:.2e}",
-            fontsize=9.5,
+def uniform_coarse_grid() -> list[tuple[float, float]]:
+    values = np.arange(
+        UNIFORM_Z_ALLOWED_MIN_M,
+        UNIFORM_Z_ALLOWED_MAX_M + 0.5 * UNIFORM_Z_COARSE_STEP_M,
+        UNIFORM_Z_COARSE_STEP_M,
+    )
+    values = np.unique(np.append(values, UNIFORM_Z_ALLOWED_MAX_M))
+    pairs: list[tuple[float, float]] = []
+    for z_min in values:
+        for z_max in values:
+            if valid_uniform_bounds(float(z_min), float(z_max)):
+                pairs.append((float(z_min), float(z_max)))
+    return pairs
+
+
+def uniform_refine_grid(z_min_best: float, z_max_best: float) -> list[tuple[float, float]]:
+    z_min_values = np.arange(
+        max(UNIFORM_Z_ALLOWED_MIN_M, z_min_best - UNIFORM_Z_REFINE_HALF_WIDTH_M),
+        min(UNIFORM_Z_ALLOWED_MAX_M, z_min_best + UNIFORM_Z_REFINE_HALF_WIDTH_M) + 0.5 * UNIFORM_Z_REFINE_STEP_M,
+        UNIFORM_Z_REFINE_STEP_M,
+    )
+    z_max_values = np.arange(
+        max(UNIFORM_Z_ALLOWED_MIN_M, z_max_best - UNIFORM_Z_REFINE_HALF_WIDTH_M),
+        min(UNIFORM_Z_ALLOWED_MAX_M, z_max_best + UNIFORM_Z_REFINE_HALF_WIDTH_M) + 0.5 * UNIFORM_Z_REFINE_STEP_M,
+        UNIFORM_Z_REFINE_STEP_M,
+    )
+    pairs: list[tuple[float, float]] = []
+    for z_min in z_min_values:
+        for z_max in z_max_values:
+            if valid_uniform_bounds(float(z_min), float(z_max)):
+                pairs.append((float(z_min), float(z_max)))
+    return pairs
+
+
+def scan_uniform_bounds(target: dict[str, pd.DataFrame]) -> tuple[tuple[float, float], pd.DataFrame, pd.DataFrame]:
+    rows = []
+    best_bounds: tuple[float, float] | None = None
+    best_score = float("inf")
+    best_frame = None
+
+    for z_min, z_max in uniform_coarse_grid():
+        frame = run_candidate("uniform", DETECTOR_DISTANCE_M, z_min_m=z_min, z_max_m=z_max)
+        score = score_frame(frame, target)
+        rows.append(
+            {
+                "model": "uniform",
+                "detector_distance_m": DETECTOR_DISTANCE_M,
+                "z_min_m": z_min,
+                "z_max_m": z_max,
+                "score_rms_ratio": score,
+            }
         )
+        if score < best_score:
+            best_bounds = (z_min, z_max)
+            best_score = score
+            best_frame = frame
+
+    if best_bounds is None or best_frame is None:
+        raise RuntimeError("Aucun candidat uniforme valide")
+
+    for z_min, z_max in uniform_refine_grid(*best_bounds):
+        frame = run_candidate("uniform", DETECTOR_DISTANCE_M, z_min_m=z_min, z_max_m=z_max)
+        score = score_frame(frame, target)
+        rows.append(
+            {
+                "model": "uniform",
+                "detector_distance_m": DETECTOR_DISTANCE_M,
+                "z_min_m": z_min,
+                "z_max_m": z_max,
+                "score_rms_ratio": score,
+            }
+        )
+        if score < best_score:
+            best_bounds = (z_min, z_max)
+            best_score = score
+            best_frame = frame
+
+    return best_bounds, best_frame, pd.DataFrame(rows)
+
+
+def labels(point_l: float, uniform_bounds: tuple[float, float]) -> dict[str, str]:
+    z_min, z_max = uniform_bounds
+    return {
+        "point": f"source ponctuelle fit (L={point_l:.1f} m)",
+        "uniform": f"source uniforme fit (L=574 m, z=[{z_min:.0f},{z_max:.0f}] m)",
+        "dk2nu": "poids dk2nu",
+    }
+
+
+def plot_curves(frames: dict[str, pd.DataFrame], labels_by_model: dict[str, str], out: Path) -> None:
+    curves = {model: {panel: total_panel(df, panel) for panel in PANELS} for model, df in frames.items()}
+    fig, axes = plt.subplots(2, 2, figsize=(11.0, 7.6), sharex=True)
+
+    styles = {
+        "point": dict(color=MODEL_COLORS["point"], linestyle=MODEL_STYLES["point"], linewidth=2.0),
+        "uniform": dict(color=MODEL_COLORS["uniform"], linestyle=MODEL_STYLES["uniform"], linewidth=1.9),
+        "dk2nu": dict(color=MODEL_COLORS["dk2nu"], linestyle=MODEL_STYLES["dk2nu"], linewidth=1.9),
+    }
+
+    for ax, panel in zip(axes.flat, PANELS):
+        for model in ["point", "uniform", "dk2nu"]:
+            data = curves[model][panel]
+            ax.step(data["Erec_GeV"], data["ratio_iss_over_3nu"], where="mid", label=labels_by_model[model], **styles[model])
+        ax.set_title(PANEL_TITLES[panel], fontsize=10)
         ax.set_xlim(0.5, 8.0)
-        ax.set_ylabel(r"$N_{ISS}/N_{3\nu}$")
+        ax.set_ylabel(r"$N_{\rm ISS}/N_{3\nu}$")
         ax.grid(alpha=0.25)
         ax.tick_params(direction="in", top=True, right=True)
         ax.minorticks_on()
@@ -118,32 +288,70 @@ def plot(point: Path, line: Path, dk2nu: Path, out: Path, emin_score: float) -> 
     for ax in axes[-1, :]:
         ax.set_xlabel("Energie reconstruite [GeV]")
     axes[0, 0].legend(fontsize=8, frameon=False)
-    fig.suptitle(
-        "Modeles de source optimisés sur dk2nu",
-        fontsize=13,
-        fontweight="bold",
-    )
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)
     plt.close(fig)
 
-    print(f"Figure sauvegardee: {out.resolve()}")
+
+def write_curve_csv(frames: dict[str, pd.DataFrame], labels_by_model: dict[str, str], out: Path) -> None:
+    rows = []
+    for model, df in frames.items():
+        for panel in PANELS:
+            data = total_panel(df, panel)
+            for _, row in data.iterrows():
+                rows.append(
+                    {
+                        "model": model,
+                        "label": labels_by_model[model],
+                        "panel": panel,
+                        "Erec_GeV": float(row["Erec_GeV"]),
+                        "ratio_iss_over_3nu": float(row["ratio_iss_over_3nu"]),
+                    }
+                )
+    out.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(out, index=False)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Plot optimized point/line source models vs dk2nu.")
-    parser.add_argument("--point", type=Path, default=DEFAULT_POINT)
-    parser.add_argument("--line", type=Path, default=DEFAULT_LINE)
-    parser.add_argument("--dk2nu", type=Path, default=DEFAULT_DK2NU)
+    parser = argparse.ArgumentParser(description="Fit point/uniform ND source models to dk2nu.")
+    parser.add_argument("--dk2nu", type=Path, default=DEFAULT_INPUTS["dk2nu"])
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    parser.add_argument("--emin-score-GeV", type=float, default=5.0)
+    parser.add_argument("--old-out", type=Path, default=DEFAULT_OLD_OUT)
+    parser.add_argument("--out-csv", type=Path, default=DEFAULT_CSV)
+    parser.add_argument("--score-csv", type=Path, default=DEFAULT_SCORE_CSV)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    plot(args.point, args.line, args.dk2nu, args.out, args.emin_score_GeV)
+    ensure_app()
+    dk2nu = read_inputs({"dk2nu": args.dk2nu})["dk2nu"]
+    target = target_curves(dk2nu)
+
+    point_l, point_frame, point_scores = scan_model("point", POINT_COARSE, target)
+    uniform_bounds, uniform_frame, uniform_scores = scan_uniform_bounds(target)
+    label_map = labels(point_l, uniform_bounds)
+    frames = {"point": point_frame, "uniform": uniform_frame, "dk2nu": dk2nu}
+
+    point_scores["z_min_m"] = np.nan
+    point_scores["z_max_m"] = np.nan
+    scores = pd.concat([point_scores, uniform_scores], ignore_index=True)
+    args.score_csv.parent.mkdir(parents=True, exist_ok=True)
+    scores.to_csv(args.score_csv, index=False)
+    write_curve_csv(frames, label_map, args.out_csv)
+    plot_curves(frames, label_map, args.out)
+    if args.old_out != args.out:
+        plot_curves(frames, label_map, args.old_out)
+
+    print(f"best point source L = {point_l:.3f} m")
+    print(f"best uniform detector distance = {DETECTOR_DISTANCE_M:.3f} m")
+    print(f"best uniform source interval = [{uniform_bounds[0]:.3f}, {uniform_bounds[1]:.3f}] m")
+    print(f"CSV sauvegarde: {args.out_csv.resolve()}")
+    print(f"Scores sauvegardes: {args.score_csv.resolve()}")
+    print(f"Figure sauvegardee: {args.out.resolve()}")
+    if args.old_out != args.out:
+        print(f"Figure legacy sauvegardee: {args.old_out.resolve()}")
 
 
 if __name__ == "__main__":

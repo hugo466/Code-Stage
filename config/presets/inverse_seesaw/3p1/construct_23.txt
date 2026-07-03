@@ -23,7 +23,7 @@ inverse_nufit_deltacp_deg = 212.0
 
 # Contraintes de non-unitarite sur |eta_{alpha beta}|
 inverse_eta_dm41_low_min_eV2 = 0.1
-inverse_eta_dm41_low_max_eV2 = 1.0
+inverse_eta_dm41_low_max_eV2 = 100.0
 inverse_eta_dm41_high_min_eV2 = 100.0
 
 # m_N > Lambda_EW
@@ -32,7 +32,7 @@ inverse_eta_abs_max_nonunitarity_3x3 = 1.3e-3, 3.4e-4, 1.35e-3, 3.4e-4, 2.2e-4, 
 # Steriles legers: Delta m^2 >= 100 eV^2
 inverse_eta_abs_max_light_highdm_3x3 = 2.4e-2, 1.25e-2, 3.45e-2, 1.25e-2, 2.2e-2, 6.0e-3, 3.45e-2, 6.0e-3, 1.0e-1
 
-# Steriles legers: Delta m^2 ~ 0.1-1 eV^2
+# Steriles legers: Delta m^2 ~ 0.1-100 eV^2
 inverse_eta_abs_max_light_lowdm_3x3 = 1.0e-2, 8.5e-3, 2.25e-2, 8.5e-3, 1.4e-2, 2.65e-2, 2.25e-2, 2.65e-2, 1.0e-1
 
 # Parametre libre dm41
@@ -44,6 +44,8 @@ inverse_construct_23_zeta_norm_min = 0.0
 inverse_construct_23_zeta_norm_max = 0.5
 inverse_construct_23_zeta_direction_min_deg = 0.0
 inverse_construct_23_zeta_direction_max_deg = 360.0
+inverse_construct_23_zeta_phase_min_deg = 0.0
+inverse_construct_23_zeta_phase_max_deg = 360.0
 
 # Deux phases de Majorana physiques (m1 = 0 dans ce modele)
 inverse_construct_23_alpha21_min_deg = 0.0

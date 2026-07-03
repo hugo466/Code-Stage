@@ -84,10 +84,10 @@ def draw_heatmap(ax, df: pd.DataFrame, flavor: str, title: str) -> None:
         cmap="magma",
     )
     ax.set_title(title, fontsize=11, fontweight="bold")
-    ax.set_xlabel("Decay position z (m)")
-    ax.set_ylabel(r"$E_\nu$ (GeV)")
+    ax.set_xlabel(r"Position de désintégration $z$ [m]")
+    ax.set_ylabel(r"Énergie du neutrino $E_\nu$ [GeV]")
     ax.tick_params(direction="in", top=True, right=True)
-    plt.colorbar(image, ax=ax, pad=0.01, label=r"$p(z|E,\alpha)$ per z-bin")
+    plt.colorbar(image, ax=ax, pad=0.01, label=r"Poids normalisé $p(z|E,\alpha)$ par bin en $z$")
 
 
 def draw_integrated_shapes(ax, df: pd.DataFrame, title: str) -> None:
@@ -104,8 +104,8 @@ def draw_integrated_shapes(ax, df: pd.DataFrame, title: str) -> None:
             label=FLAVOR_LABELS[flavor],
         )
     ax.set_title(title, fontsize=11, fontweight="bold")
-    ax.set_xlabel("Decay position z (m)")
-    ax.set_ylabel("Integrated normalized weight")
+    ax.set_xlabel(r"Position de désintégration $z$ [m]")
+    ax.set_ylabel("Poids normalisé intégré")
     ax.tick_params(direction="in", top=True, right=True)
     ax.minorticks_on()
     ax.tick_params(which="minor", direction="in", top=True, right=True)
@@ -117,13 +117,12 @@ def main() -> None:
     rhc = load_profile(RHC_CSV)
 
     fig, axes = plt.subplots(2, 2, figsize=(12.5, 8.8))
-    draw_heatmap(axes[0, 0], fhc, "numu", r"FHC ND dk2nu weights $p(z|E,\nu_\mu)$")
-    draw_heatmap(axes[0, 1], rhc, "numubar", r"RHC ND dk2nu weights $p(z|E,\bar{\nu}_\mu)$")
-    draw_integrated_shapes(axes[1, 0], fhc, "FHC integrated z-shapes by flavor")
-    draw_integrated_shapes(axes[1, 1], rhc, "RHC integrated z-shapes by flavor")
+    draw_heatmap(axes[0, 0], fhc, "numu", r"FHC ND : poids dk2nu $p(z|E,\nu_\mu)$")
+    draw_heatmap(axes[0, 1], rhc, "numubar", r"RHC ND : poids dk2nu $p(z|E,\bar{\nu}_\mu)$")
+    draw_integrated_shapes(axes[1, 0], fhc, "FHC : profils en z intégrés par saveur")
+    draw_integrated_shapes(axes[1, 1], rhc, "RHC : profils en z intégrés par saveur")
 
-    fig.suptitle("DUNE ND dk2nu source weights used for source averaging", fontsize=14, fontweight="bold")
-    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+    fig.tight_layout()
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=220, bbox_inches="tight")
     plt.close(fig)

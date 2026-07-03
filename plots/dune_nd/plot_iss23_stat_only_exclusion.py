@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor
 
 ROOT = Path(__file__).resolve().parents[2]
 MPLCONFIGDIR = ROOT / ".matplotlib_cache"
@@ -21,7 +22,6 @@ from matplotlib.colors import LogNorm
 from plots.dune_nd.plot_iss23_scan_max_event_ratio_map import (
     AVOGADRO,
     EXPOSURE_YEARS,
-    FLUX_DIR,
     GLOBES,
     PANELS,
     POT_PER_YEAR,
@@ -30,15 +30,15 @@ from plots.dune_nd.plot_iss23_scan_max_event_ratio_map import (
     TARGET_MASS_KT,
     build_mixing,
     panel_components,
-    read_flux,
+    read_dk2nu_flux_from_z,
     read_source_profile,
     read_xsec,
 )
 
 
-POINTS_CSV = ROOT / "data" / "inverse_seesaw" / "3p1" / "inverse_construct_23_kept_points_lowdm_to_100" / "inverse_construct_23_kept_points_lowdm_to_100.csv"
-OUT_CSV = ROOT / "data" / "dune_nd" / "exclusion" / "iss23_stat_only_chi2_lowdm_to_100.csv"
-OUT_FIG = ROOT / "figures" / "dune_nd" / "exclusion" / "iss23_stat_only_exclusion_lowdm_to_100.png"
+POINTS_CSV = ROOT / "data" / "inverse_seesaw" / "3p1" / "inverse_construct_23_kept_points" / "inverse_construct_23_kept_points.csv"
+OUT_CSV = ROOT / "data" / "dune_nd" / "exclusion" / "iss23_stat_only_chi2.csv"
+OUT_FIG = ROOT / "figures" / "dune_nd" / "iss23" / "exclusion" / "iss23_stat_only_exclusion.png"
 
 CL_LEVELS_2DOF = {
     "90% CL": 4.61,
@@ -88,8 +88,8 @@ def compute_stat_only_chi2(df: pd.DataFrame, e_min: float, e_max: float, n_bins:
     width = (e_max - e_min) / n_bins
 
     fluxes = {
-        "FHC": read_flux(FLUX_DIR / "flux_dune_neutrino_ND_globes.txt"),
-        "RHC": read_flux(FLUX_DIR / "flux_dune_antineutrino_ND_globes.txt"),
+        "FHC": read_dk2nu_flux_from_z(SOURCE_PROFILE_FHC),
+        "RHC": read_dk2nu_flux_from_z(SOURCE_PROFILE_RHC),
     }
     profiles = {
         "FHC": read_source_profile(SOURCE_PROFILE_FHC),
@@ -141,6 +141,17 @@ def compute_stat_only_chi2(df: pd.DataFrame, e_min: float, e_max: float, n_bins:
     out["excluded_disappearance_90cl_stat_only"] = out["chi2_disappearance"] >= CL_LEVELS_2DOF["90% CL"]
     out["excluded_all_90cl_stat_only"] = out["chi2_all"] >= CL_LEVELS_2DOF["90% CL"]
     return out
+
+
+def compute_stat_only_chi2_worker(payload: tuple[pd.DataFrame, float, float, int, float]) -> pd.DataFrame:
+    df, e_min, e_max, n_bins, epsilon = payload
+    return compute_stat_only_chi2(df, e_min, e_max, n_bins, epsilon)
+
+
+def split_dataframe(df: pd.DataFrame, chunk_size: int) -> list[pd.DataFrame]:
+    if chunk_size <= 0 or chunk_size >= len(df):
+        return [df]
+    return [df.iloc[start:start + chunk_size].copy() for start in range(0, len(df), chunk_size)]
 
 
 def contour_if_possible(ax, x: np.ndarray, y: np.ndarray, z: np.ndarray, levels: list[float], n_bins: int = 30) -> None:
@@ -248,13 +259,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--e-bins", type=int, default=30)
     parser.add_argument("--epsilon", type=float, default=1.0e-12)
     parser.add_argument("--max-points", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=min(8, os.cpu_count() or 1))
+    parser.add_argument("--chunk-size", type=int, default=1200)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     points = select_points(args.points_csv, args.max_points)
-    summary = compute_stat_only_chi2(points, args.e_min_GeV, args.e_max_GeV, args.e_bins, args.epsilon)
+    if args.workers > 1 and len(points) > args.chunk_size:
+        chunks = split_dataframe(points, args.chunk_size)
+        print(f"Calcul parallele: {len(chunks)} blocs, {args.workers} workers, {len(points)} points")
+        payloads = [(chunk, args.e_min_GeV, args.e_max_GeV, args.e_bins, args.epsilon) for chunk in chunks]
+        with ProcessPoolExecutor(max_workers=args.workers) as pool:
+            summary = pd.concat(pool.map(compute_stat_only_chi2_worker, payloads), ignore_index=True)
+    else:
+        summary = compute_stat_only_chi2(points, args.e_min_GeV, args.e_max_GeV, args.e_bins, args.epsilon)
     args.out_csv.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(args.out_csv, index=False)
     draw_exclusion(summary, args.out)

@@ -1,0 +1,4 @@
+include = energy.txt
+
+output_csv_3p2_path = data/oscillations/3p2/nd_3p2_probabilities_dm41_10.csv
+dm41_3p2_eV2 = 10.0

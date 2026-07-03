@@ -18,6 +18,7 @@ def build_parameter_schema(representation: str):
         "dm41_target_eV2",
         "zeta_norm",
         "zeta_direction_deg",
+        "zeta_phase_deg",
         "majorana_alpha21_deg",
         "majorana_alpha31_deg",
     ]
@@ -25,6 +26,7 @@ def build_parameter_schema(representation: str):
         r"$\Delta m_{41}^2$",
         r"$\|\zeta\|$",
         r"$\phi_\zeta$",
+        r"$\varphi_\zeta$",
         r"$\alpha_{21}$",
         r"$\alpha_{31}$",
     ]
@@ -73,7 +75,7 @@ def extract_row_values(row, columns, representation: str):
             phase_rad = np.deg2rad(float(phase_deg))
             val = float(mag) * (np.cos(phase_rad) if col.endswith("_re") else np.sin(phase_rad))
         else:
-            if col in {"majorana_alpha21_deg", "majorana_alpha31_deg"} and col not in row:
+            if col in {"zeta_phase_deg", "majorana_alpha21_deg", "majorana_alpha31_deg"} and col not in row:
                 val = 0.0
                 values.append(val)
                 continue

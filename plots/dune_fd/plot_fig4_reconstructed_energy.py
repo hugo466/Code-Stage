@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -15,6 +15,7 @@ from matplotlib.lines import Line2D
 
 BASE = Path("data/dune/2103.04797v2/dune_globes")
 OUT = Path("figures/dune_fd/reference/fig4_reconstructed_energy_globes.png")
+OUT_GLOBES_ONLY = Path("figures/dune_fd/reference/fig4_reconstructed_energy_globes_only.png")
 OUT_CSV = Path("data/dune/validation/fig4_reconstructed_energy_spectra.csv")
 OUT_NO_SMEARING = Path("figures/dune_fd/reference/fig4_reconstructed_energy_globes_no_smearing.png")
 OUT_NO_SMEARING_CSV = Path("data/dune/validation/fig4_reconstructed_energy_spectra_no_smearing.csv")
@@ -584,13 +585,14 @@ def parse_args():
     parser.add_argument("--no-efficiency", action="store_true", help="Set all detector efficiencies to one")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--out-csv", type=Path, default=None)
+    parser.add_argument("--no-dk2nu", action="store_true", help="Do not overlay spectra computed with the absolute dk2nu FD flux")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
     ideal_response = args.no_smearing and args.no_efficiency
-    default_out = OUT_IDEAL_RESPONSE if ideal_response else (OUT_NO_SMEARING if args.no_smearing else OUT)
+    default_out = OUT_IDEAL_RESPONSE if ideal_response else (OUT_NO_SMEARING if args.no_smearing else (OUT_GLOBES_ONLY if args.no_dk2nu else OUT))
     default_csv = (
         OUT_IDEAL_RESPONSE_CSV
         if ideal_response
@@ -604,12 +606,14 @@ def main():
         out_csv=out_csv,
         flux_source="globes",
     )
-    dk2nu_spectra = compute_spectra(
-        use_smearing=not args.no_smearing,
-        use_efficiency=not args.no_efficiency,
-        out_csv=None,
-        flux_source="dk2nu",
-    )
+    dk2nu_spectra = None
+    if not args.no_dk2nu:
+        dk2nu_spectra = compute_spectra(
+            use_smearing=not args.no_smearing,
+            use_efficiency=not args.no_efficiency,
+            out_csv=None,
+            flux_source="dk2nu",
+        )
     plot_figure(
         spectra,
         dk2nu_spectra,

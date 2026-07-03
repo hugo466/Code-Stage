@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Plot the DUNE FD GLoBES migration matrices used by the Fig. 4 code."""
 
 from __future__ import annotations
@@ -152,8 +152,7 @@ def main() -> None:
     for ax in axes[:, 0]:
         ax.set_ylabel(r"Reconstructed energy $E_\mathrm{rec}$ (GeV)")
 
-    fig.suptitle("DUNE FD GLoBES smearing matrices", fontsize=16, fontweight="bold")
-    fig.subplots_adjust(left=0.10, right=0.91, bottom=0.07, top=0.94, wspace=0.12, hspace=0.22)
+    fig.subplots_adjust(left=0.10, right=0.91, bottom=0.07, top=0.97, wspace=0.12, hspace=0.22)
     colorbar_ax = fig.add_axes((0.93, 0.15, 0.018, 0.72))
     colorbar = fig.colorbar(image, cax=colorbar_ax)
     colorbar.set_label(r"Migration weight $M(E_\mathrm{rec}, E_\mathrm{true})$")

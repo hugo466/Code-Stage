@@ -10,6 +10,17 @@ static int starts_with(const char *s, const char *prefix) {
     return strncmp(s, prefix, strlen(prefix)) == 0;
 }
 
+static int is_key_line(const char *line, const char *key) {
+    if (!starts_with(line, key)) {
+        return 0;
+    }
+    const char *p = line + strlen(key);
+    while (*p && isspace((unsigned char)*p)) {
+        ++p;
+    }
+    return *p == '=';
+}
+
 static const char *value_after_equals(const char *line) {
     const char *eq = strchr(line, '=');
     return eq ? eq + 1 : NULL;
@@ -151,7 +162,15 @@ DuneStatus dune_iss23_read_point(const char *path, DuneTheoryPoint *point) {
 
     char line[2048];
     int read_solver = 0;
+    int read_solver_re = 0;
+    int read_solver_im = 0;
     int read_constructed = 0;
+    int read_constructed_re = 0;
+    int read_constructed_im = 0;
+    double solver_re[4][4] = {{0.0}};
+    double solver_im[4][4] = {{0.0}};
+    double constructed_re[4][4] = {{0.0}};
+    double constructed_im[4][4] = {{0.0}};
     while (fgets(line, sizeof(line), in) != NULL) {
         if (starts_with(line, "point_id")) {
             const char *v = value_after_equals(line);
@@ -176,7 +195,23 @@ DuneStatus dune_iss23_read_point(const char *path, DuneTheoryPoint *point) {
             if (v) point->dm41_eV2 = strtod(v, NULL);
         } else if (starts_with(line, "eta_abs_3x3")) {
             (void)parse_eta_row(line, point->eta_abs_3x3);
-        } else if (starts_with(line, "U4x4_solver")) {
+        } else if (is_key_line(line, "U4x4_solver_re")) {
+            for (int r = 0; r < 4; ++r) {
+                if (!fgets(line, sizeof(line), in) || !parse_matrix_row4(line, solver_re[r])) {
+                    fclose(in);
+                    return DUNE_STATUS_MISSING_INPUT;
+                }
+            }
+            read_solver_re = 1;
+        } else if (is_key_line(line, "U4x4_solver_im")) {
+            for (int r = 0; r < 4; ++r) {
+                if (!fgets(line, sizeof(line), in) || !parse_matrix_row4(line, solver_im[r])) {
+                    fclose(in);
+                    return DUNE_STATUS_MISSING_INPUT;
+                }
+            }
+            read_solver_im = 1;
+        } else if (is_key_line(line, "U4x4_solver")) {
             for (int r = 0; r < 4; ++r) {
                 double row[4] = {0.0};
                 if (!fgets(line, sizeof(line), in) || !parse_matrix_row4(line, row)) {
@@ -188,7 +223,23 @@ DuneStatus dune_iss23_read_point(const char *path, DuneTheoryPoint *point) {
                 }
             }
             read_solver = 1;
-        } else if (starts_with(line, "U4x4_constructed") && !read_solver) {
+        } else if (is_key_line(line, "U4x4_constructed_re")) {
+            for (int r = 0; r < 4; ++r) {
+                if (!fgets(line, sizeof(line), in) || !parse_matrix_row4(line, constructed_re[r])) {
+                    fclose(in);
+                    return DUNE_STATUS_MISSING_INPUT;
+                }
+            }
+            read_constructed_re = 1;
+        } else if (is_key_line(line, "U4x4_constructed_im")) {
+            for (int r = 0; r < 4; ++r) {
+                if (!fgets(line, sizeof(line), in) || !parse_matrix_row4(line, constructed_im[r])) {
+                    fclose(in);
+                    return DUNE_STATUS_MISSING_INPUT;
+                }
+            }
+            read_constructed_im = 1;
+        } else if (is_key_line(line, "U4x4_constructed") && !read_solver) {
             for (int r = 0; r < 4; ++r) {
                 double row[4] = {0.0};
                 if (!fgets(line, sizeof(line), in) || !parse_matrix_row4(line, row)) {
@@ -204,6 +255,21 @@ DuneStatus dune_iss23_read_point(const char *path, DuneTheoryPoint *point) {
     }
 
     fclose(in);
+    if (read_solver_re) {
+        for (int r = 0; r < 4; ++r) {
+            for (int c = 0; c < 4; ++c) {
+                point->mixing[r][c] = solver_re[r][c] + (read_solver_im ? solver_im[r][c] : 0.0) * I;
+            }
+        }
+        read_solver = 1;
+    } else if (!read_solver && read_constructed_re) {
+        for (int r = 0; r < 4; ++r) {
+            for (int c = 0; c < 4; ++c) {
+                point->mixing[r][c] = constructed_re[r][c] + (read_constructed_im ? constructed_im[r][c] : 0.0) * I;
+            }
+        }
+        read_constructed = 1;
+    }
     point->light_masses_eV[0] = 0.0;
     point->light_masses_eV[1] = point->dm21_eV2 > 0.0 ? sqrt(point->dm21_eV2) : 0.0;
     point->light_masses_eV[2] = point->dm31_eV2 > 0.0 ? sqrt(point->dm31_eV2) : 0.0;

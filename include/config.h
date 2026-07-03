@@ -20,9 +20,11 @@ typedef enum {
     OPERATION_INVERSE_PMNS_FILTER_3P1,
     OPERATION_INVERSE_PMNS_FILTER_3P2,
     OPERATION_INVERSE_CONSTRUCT_23_3P1,
+    OPERATION_INVERSE_CONSTRUCT_24_3P2,
     OPERATION_DUNE_ND_PREDICT_SPECTRUM,
     OPERATION_DUNE_FD_FIG4_VALIDATION,
-    OPERATION_DUNE_ND_FIG4_SOURCE_LINE
+    OPERATION_DUNE_ND_FIG4_SOURCE_LINE,
+    OPERATION_DUNE_BASELINE_EFFECTS_SENSITIVITY
 } SimulationOperation;
 
 typedef struct {
@@ -90,6 +92,7 @@ typedef struct {
     char output_cp_heatmap_csv_path[256];
     char output_inverse_pmns_filter_csv_path[256];
     char output_inverse_construct_23_csv_path[256];
+    char output_inverse_construct_24_csv_path[256];
     char inverse_kept_points_dir[256];
     int inverse_clear_kept_points_dir;
 
@@ -131,6 +134,44 @@ typedef struct {
     char dune_residuals_csv[256];
     char dune_point_observables_csv[256];
 
+    char sensitivity_detector_mode[32];
+    char sensitivity_asimov_mode[32];
+    char sensitivity_test_backend[32];
+    char sensitivity_points_index_csv[256];
+    char sensitivity_output_csv[256];
+    char sensitivity_source_model[32];
+    char sensitivity_scan_plane[32];
+    char sensitivity_nd_dk2nu_flux_z_fhc_file[256];
+    char sensitivity_nd_dk2nu_flux_z_rhc_file[256];
+    char sensitivity_fd_dk2nu_flux_z_fhc_file[256];
+    char sensitivity_fd_dk2nu_flux_z_rhc_file[256];
+    int sensitivity_max_points;
+    int sensitivity_point_offset;
+    int sensitivity_shape_systematics_enabled;
+    int sensitivity_priors_enabled;
+    int sensitivity_minimizer_max_iter;
+    double sensitivity_minimizer_tolerance;
+    double sensitivity_poisson_epsilon;
+    double sensitivity_dm41_min_eV2;
+    double sensitivity_dm41_max_eV2;
+    int sensitivity_dm41_points;
+    int sensitivity_dm41_logspace;
+    double sensitivity_theta14_min_deg;
+    double sensitivity_theta14_max_deg;
+    int sensitivity_theta14_points;
+    int sensitivity_theta14_logspace;
+    double sensitivity_sin2_theta14_min;
+    double sensitivity_sin2_theta14_max;
+    double sensitivity_theta24_min_deg;
+    double sensitivity_theta24_max_deg;
+    int sensitivity_theta24_points;
+    int sensitivity_theta24_logspace;
+    double sensitivity_sin2_theta24_min;
+    double sensitivity_sin2_theta24_max;
+    double sensitivity_theta34_deg;
+    double sensitivity_delta24_deg;
+    double sensitivity_delta34_deg;
+
     /* Cibles NuFIT 6.0 2024 pour les angles de melange actifs et delta_CP */
     double inverse_nufit_theta12_deg;
     double inverse_nufit_theta23_deg;
@@ -164,10 +205,13 @@ typedef struct {
     int inverse_construct_23_seed;
     double inverse_construct_23_dm41_min_eV2;
     double inverse_construct_23_dm41_max_eV2;
+    int inverse_construct_23_dm41_logspace;
     double inverse_construct_23_zeta_norm_min;
     double inverse_construct_23_zeta_norm_max;
     double inverse_construct_23_zeta_direction_min_deg;
     double inverse_construct_23_zeta_direction_max_deg;
+    double inverse_construct_23_zeta_phase_min_deg;
+    double inverse_construct_23_zeta_phase_max_deg;
     double inverse_construct_23_alpha21_min_deg;
     double inverse_construct_23_alpha21_max_deg;
     double inverse_construct_23_alpha31_min_deg;
@@ -196,6 +240,30 @@ typedef struct {
     double inverse_construct_23_M1_max_GeV;
     double inverse_construct_23_M2_min_GeV;
     double inverse_construct_23_M2_max_GeV;
+
+    /* Construction adaptee (nR,nSL)=(2,4): secteur leger 3+2 avec C=V diag(s1,s2) W */
+    int inverse_construct_24_samples;
+    int inverse_construct_24_seed;
+    double inverse_construct_24_dm41_min_eV2;
+    double inverse_construct_24_dm41_max_eV2;
+    int inverse_construct_24_dm41_logspace;
+    double inverse_construct_24_dm51_min_eV2;
+    double inverse_construct_24_dm51_max_eV2;
+    int inverse_construct_24_dm51_logspace;
+    double inverse_construct_24_s1_min;
+    double inverse_construct_24_s1_max;
+    double inverse_construct_24_s2_min;
+    double inverse_construct_24_s2_max;
+    double inverse_construct_24_v_angle_min_deg;
+    double inverse_construct_24_v_angle_max_deg;
+    double inverse_construct_24_w_angle_min_deg;
+    double inverse_construct_24_w_angle_max_deg;
+    double inverse_construct_24_phase_min_deg;
+    double inverse_construct_24_phase_max_deg;
+    double inverse_construct_24_alpha21_min_deg;
+    double inverse_construct_24_alpha21_max_deg;
+    double inverse_construct_24_alpha31_min_deg;
+    double inverse_construct_24_alpha31_max_deg;
 
     /* Ranges de scan inverse seesaw (min/max/pas) */
     double inverse_scan_mu00_min_eV;

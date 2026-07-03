@@ -1,7 +1,17 @@
 bin/
 *.exe
 *.o
+__pycache__/
+*.py[cod]
+.matplotlib_cache/
+.pydeps*/
+.pythondeps/
+config/presets/dune/nd/_fit_tmp/
+config/presets/dune/nd/*_debug.ini
 
 # Generated datasets (too large for GitHub)
 data/**
 !data/.gitkeep
+!data/dune/
+!data/dune/sensitivity/
+!data/dune/sensitivity/*.csv

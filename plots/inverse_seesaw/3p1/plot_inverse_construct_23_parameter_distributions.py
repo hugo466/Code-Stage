@@ -123,12 +123,15 @@ def load_distributions():
 
     zeta_direction_eta_pass_deg = to_degrees_if_radians(df_eta_pass['zeta_direction_deg'].values)
     zeta_direction_eta_fail_deg = to_degrees_if_radians(df_eta_fail['zeta_direction_deg'].values)
+    zeta_phase_eta_pass_deg = optional_column(df_eta_pass, 'zeta_phase_deg')
+    zeta_phase_eta_fail_deg = optional_column(df_eta_fail, 'zeta_phase_deg')
     
     # Extract parameter distributions: red=pmns+eta, blue=pmns only
     parameters = {
         'dm41': (df_eta_pass['dm41_target_eV2'].values, df_eta_fail['dm41_target_eV2'].values, r'$\Delta m_{41}$ [eV$^2$]'),
         'zeta_norm': (df_eta_pass['zeta_norm'].values, df_eta_fail['zeta_norm'].values, r'$\|\zeta\|$'),
         'zeta_direction': (zeta_direction_eta_pass_deg, zeta_direction_eta_fail_deg, r'$\phi_\zeta$ [deg]'),
+        'zeta_phase': (zeta_phase_eta_pass_deg, zeta_phase_eta_fail_deg, r'$\varphi_\zeta$ [deg]'),
         'majorana_alpha21': (optional_column(df_eta_pass, 'majorana_alpha21_deg'), optional_column(df_eta_fail, 'majorana_alpha21_deg'), r'$\alpha_{21}$ [deg]'),
         'majorana_alpha31': (optional_column(df_eta_pass, 'majorana_alpha31_deg'), optional_column(df_eta_fail, 'majorana_alpha31_deg'), r'$\alpha_{31}$ [deg]'),
         'M1': (df_eta_pass['M1_GeV'].values, df_eta_fail['M1_GeV'].values, r'$M_1$ [GeV]'),

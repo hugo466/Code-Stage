@@ -23,7 +23,7 @@ inverse_nufit_deltacp_deg = 212.0
 
 # Contraintes de non-unitarite sur |eta_{alpha beta}|
 inverse_eta_dm41_low_min_eV2 = 0.1
-inverse_eta_dm41_low_max_eV2 = 1.0
+inverse_eta_dm41_low_max_eV2 = 100.0
 inverse_eta_dm41_high_min_eV2 = 100.0
 
 # m_N > Lambda_EW
@@ -44,6 +44,8 @@ inverse_construct_23_zeta_norm_min = 0.0
 inverse_construct_23_zeta_norm_max = 0.5
 inverse_construct_23_zeta_direction_min_deg = 0.0
 inverse_construct_23_zeta_direction_max_deg = 360.0
+inverse_construct_23_zeta_phase_min_deg = 0.0
+inverse_construct_23_zeta_phase_max_deg = 360.0
 
 # Deux phases de Majorana physiques (m1 = 0 dans ce modele)
 inverse_construct_23_alpha21_min_deg = 0.0

@@ -37,7 +37,7 @@ from plots.dune_nd.plot_iss23_scan_max_event_ratio_map import (
 
 
 OUT_DIR = ROOT / "data" / "dune_nd" / "scan_maps" / "debug"
-FIG_DIR = ROOT / "figures" / "dune_nd" / "scan_maps" / "debug"
+FIG_DIR = ROOT / "figures" / "dune_nd" / "iss23" / "scan_maps" / "debug"
 POINTS_OUT = OUT_DIR / "appearance_transition_point_debug.csv"
 BINS_OUT = OUT_DIR / "appearance_transition_binned_debug.csv"
 REPORT_OUT = OUT_DIR / "appearance_transition_report.txt"

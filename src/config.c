@@ -26,6 +26,8 @@ static const char *recommended_preset_for_operation(SimulationOperation operatio
             return "config/presets/inverse_seesaw/3p2/pmns_filter.txt";
         case OPERATION_INVERSE_CONSTRUCT_23_3P1:
             return "config/presets/inverse_seesaw/3p1/construct_23.txt";
+        case OPERATION_INVERSE_CONSTRUCT_24_3P2:
+            return "config/presets/inverse_seesaw/3p2/construct_24.txt";
         case OPERATION_DUNE_ND_PREDICT_SPECTRUM:
         case OPERATION_DUNE_FD_FIG4_VALIDATION:
         case OPERATION_DUNE_ND_FIG4_SOURCE_LINE:
@@ -199,6 +201,10 @@ static int parse_operation(const char *value_str, SimulationOperation *out) {
         *out = OPERATION_INVERSE_CONSTRUCT_23_3P1;
         return 0;
     }
+    if (strcmp(value_str, "inverse_construct_24_3p2") == 0) {
+        *out = OPERATION_INVERSE_CONSTRUCT_24_3P2;
+        return 0;
+    }
     if (strcmp(value_str, "dune_nd_predict_spectrum") == 0) {
         *out = OPERATION_DUNE_ND_PREDICT_SPECTRUM;
         return 0;
@@ -210,6 +216,11 @@ static int parse_operation(const char *value_str, SimulationOperation *out) {
     if (strcmp(value_str, "dune_nd_fig4_source_line") == 0 ||
         strcmp(value_str, "dune_nd_fig4_point_source") == 0) {
         *out = OPERATION_DUNE_ND_FIG4_SOURCE_LINE;
+        return 0;
+    }
+    if (strcmp(value_str, "dune_baseline_effects_sensitivity") == 0 ||
+        strcmp(value_str, "dune_sensitivity") == 0) {
+        *out = OPERATION_DUNE_BASELINE_EFFECTS_SENSITIVITY;
         return 0;
     }
     return 1;
@@ -721,6 +732,8 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "inverse_eta_dm41_low_max_eV2") == 0) return parse_double(value, &cfg->inverse_eta_dm41_low_max_eV2);
     if (strcmp(key, "inverse_eta_dm41_high_min_eV2") == 0) return parse_double(value, &cfg->inverse_eta_dm41_high_min_eV2);
     if (strcmp(key, "inverse_br_muegamma_max") == 0) return parse_double(value, &cfg->inverse_br_muegamma_max);
+    if (strcmp(key, "inverse_construct_23_zeta_phase_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_phase_min_deg);
+    if (strcmp(key, "inverse_construct_23_zeta_phase_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_phase_max_deg);
     if (strcmp(key, "dune_theory_index_csv") == 0 ||
         strcmp(key, "theory.index_csv") == 0 ||
         strcmp(key, "point_index_csv") == 0 ||
@@ -883,6 +896,151 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
         cfg->dune_point_observables_csv[sizeof(cfg->dune_point_observables_csv) - 1] = '\0';
         return 0;
     }
+    if (strcmp(key, "sensitivity.detector_mode") == 0 || strcmp(key, "sensitivity_detector_mode") == 0) {
+        strncpy(cfg->sensitivity_detector_mode, value, sizeof(cfg->sensitivity_detector_mode) - 1);
+        cfg->sensitivity_detector_mode[sizeof(cfg->sensitivity_detector_mode) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.asimov_mode") == 0 || strcmp(key, "sensitivity_asimov_mode") == 0) {
+        strncpy(cfg->sensitivity_asimov_mode, value, sizeof(cfg->sensitivity_asimov_mode) - 1);
+        cfg->sensitivity_asimov_mode[sizeof(cfg->sensitivity_asimov_mode) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.test_backend") == 0 || strcmp(key, "sensitivity_test_backend") == 0) {
+        strncpy(cfg->sensitivity_test_backend, value, sizeof(cfg->sensitivity_test_backend) - 1);
+        cfg->sensitivity_test_backend[sizeof(cfg->sensitivity_test_backend) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.points_index_csv") == 0 ||
+        strcmp(key, "sensitivity_points_index_csv") == 0) {
+        strncpy(cfg->sensitivity_points_index_csv, value, sizeof(cfg->sensitivity_points_index_csv) - 1);
+        cfg->sensitivity_points_index_csv[sizeof(cfg->sensitivity_points_index_csv) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.output_csv") == 0 ||
+        strcmp(key, "sensitivity_output_csv") == 0 ||
+        strcmp(key, "output.sensitivity_csv") == 0) {
+        strncpy(cfg->sensitivity_output_csv, value, sizeof(cfg->sensitivity_output_csv) - 1);
+        cfg->sensitivity_output_csv[sizeof(cfg->sensitivity_output_csv) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.source_model") == 0 || strcmp(key, "sensitivity_source_model") == 0) {
+        strncpy(cfg->sensitivity_source_model, value, sizeof(cfg->sensitivity_source_model) - 1);
+        cfg->sensitivity_source_model[sizeof(cfg->sensitivity_source_model) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.scan_plane") == 0 || strcmp(key, "sensitivity_scan_plane") == 0) {
+        strncpy(cfg->sensitivity_scan_plane, value, sizeof(cfg->sensitivity_scan_plane) - 1);
+        cfg->sensitivity_scan_plane[sizeof(cfg->sensitivity_scan_plane) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.nd_dk2nu_flux_z_fhc_file") == 0 ||
+        strcmp(key, "sensitivity_nd_dk2nu_flux_z_fhc_file") == 0) {
+        strncpy(cfg->sensitivity_nd_dk2nu_flux_z_fhc_file, value, sizeof(cfg->sensitivity_nd_dk2nu_flux_z_fhc_file) - 1);
+        cfg->sensitivity_nd_dk2nu_flux_z_fhc_file[sizeof(cfg->sensitivity_nd_dk2nu_flux_z_fhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.nd_dk2nu_flux_z_rhc_file") == 0 ||
+        strcmp(key, "sensitivity_nd_dk2nu_flux_z_rhc_file") == 0) {
+        strncpy(cfg->sensitivity_nd_dk2nu_flux_z_rhc_file, value, sizeof(cfg->sensitivity_nd_dk2nu_flux_z_rhc_file) - 1);
+        cfg->sensitivity_nd_dk2nu_flux_z_rhc_file[sizeof(cfg->sensitivity_nd_dk2nu_flux_z_rhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.fd_dk2nu_flux_z_fhc_file") == 0 ||
+        strcmp(key, "sensitivity_fd_dk2nu_flux_z_fhc_file") == 0) {
+        strncpy(cfg->sensitivity_fd_dk2nu_flux_z_fhc_file, value, sizeof(cfg->sensitivity_fd_dk2nu_flux_z_fhc_file) - 1);
+        cfg->sensitivity_fd_dk2nu_flux_z_fhc_file[sizeof(cfg->sensitivity_fd_dk2nu_flux_z_fhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.fd_dk2nu_flux_z_rhc_file") == 0 ||
+        strcmp(key, "sensitivity_fd_dk2nu_flux_z_rhc_file") == 0) {
+        strncpy(cfg->sensitivity_fd_dk2nu_flux_z_rhc_file, value, sizeof(cfg->sensitivity_fd_dk2nu_flux_z_rhc_file) - 1);
+        cfg->sensitivity_fd_dk2nu_flux_z_rhc_file[sizeof(cfg->sensitivity_fd_dk2nu_flux_z_rhc_file) - 1] = '\0';
+        return 0;
+    }
+    if (strcmp(key, "sensitivity.max_points") == 0 || strcmp(key, "sensitivity_max_points") == 0) {
+        return parse_int(value, &cfg->sensitivity_max_points);
+    }
+    if (strcmp(key, "sensitivity.point_offset") == 0 || strcmp(key, "sensitivity_point_offset") == 0) {
+        return parse_int(value, &cfg->sensitivity_point_offset);
+    }
+    if (strcmp(key, "sensitivity.shape_systematics_enabled") == 0 ||
+        strcmp(key, "sensitivity_shape_systematics_enabled") == 0) {
+        return parse_int(value, &cfg->sensitivity_shape_systematics_enabled);
+    }
+    if (strcmp(key, "sensitivity.priors_enabled") == 0 ||
+        strcmp(key, "sensitivity_priors_enabled") == 0) {
+        return parse_int(value, &cfg->sensitivity_priors_enabled);
+    }
+    if (strcmp(key, "sensitivity.minimizer_max_iter") == 0 ||
+        strcmp(key, "sensitivity_minimizer_max_iter") == 0) {
+        return parse_int(value, &cfg->sensitivity_minimizer_max_iter);
+    }
+    if (strcmp(key, "sensitivity.minimizer_tolerance") == 0 ||
+        strcmp(key, "sensitivity_minimizer_tolerance") == 0) {
+        return parse_double(value, &cfg->sensitivity_minimizer_tolerance);
+    }
+    if (strcmp(key, "sensitivity.poisson_epsilon") == 0 ||
+        strcmp(key, "sensitivity_poisson_epsilon") == 0) {
+        return parse_double(value, &cfg->sensitivity_poisson_epsilon);
+    }
+    if (strcmp(key, "sensitivity.dm41_min_eV2") == 0 || strcmp(key, "sensitivity_dm41_min_eV2") == 0) {
+        return parse_double(value, &cfg->sensitivity_dm41_min_eV2);
+    }
+    if (strcmp(key, "sensitivity.dm41_max_eV2") == 0 || strcmp(key, "sensitivity_dm41_max_eV2") == 0) {
+        return parse_double(value, &cfg->sensitivity_dm41_max_eV2);
+    }
+    if (strcmp(key, "sensitivity.dm41_points") == 0 || strcmp(key, "sensitivity_dm41_points") == 0) {
+        return parse_int(value, &cfg->sensitivity_dm41_points);
+    }
+    if (strcmp(key, "sensitivity.dm41_logspace") == 0 || strcmp(key, "sensitivity_dm41_logspace") == 0) {
+        return parse_int(value, &cfg->sensitivity_dm41_logspace);
+    }
+    if (strcmp(key, "sensitivity.theta14_min_deg") == 0 || strcmp(key, "sensitivity_theta14_min_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_theta14_min_deg);
+    }
+    if (strcmp(key, "sensitivity.theta14_max_deg") == 0 || strcmp(key, "sensitivity_theta14_max_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_theta14_max_deg);
+    }
+    if (strcmp(key, "sensitivity.theta14_points") == 0 || strcmp(key, "sensitivity_theta14_points") == 0) {
+        return parse_int(value, &cfg->sensitivity_theta14_points);
+    }
+    if (strcmp(key, "sensitivity.theta14_logspace") == 0 || strcmp(key, "sensitivity_theta14_logspace") == 0) {
+        return parse_int(value, &cfg->sensitivity_theta14_logspace);
+    }
+    if (strcmp(key, "sensitivity.sin2_theta14_min") == 0 || strcmp(key, "sensitivity_sin2_theta14_min") == 0) {
+        return parse_double(value, &cfg->sensitivity_sin2_theta14_min);
+    }
+    if (strcmp(key, "sensitivity.sin2_theta14_max") == 0 || strcmp(key, "sensitivity_sin2_theta14_max") == 0) {
+        return parse_double(value, &cfg->sensitivity_sin2_theta14_max);
+    }
+    if (strcmp(key, "sensitivity.theta24_min_deg") == 0 || strcmp(key, "sensitivity_theta24_min_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_theta24_min_deg);
+    }
+    if (strcmp(key, "sensitivity.theta24_max_deg") == 0 || strcmp(key, "sensitivity_theta24_max_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_theta24_max_deg);
+    }
+    if (strcmp(key, "sensitivity.theta24_points") == 0 || strcmp(key, "sensitivity_theta24_points") == 0) {
+        return parse_int(value, &cfg->sensitivity_theta24_points);
+    }
+    if (strcmp(key, "sensitivity.theta24_logspace") == 0 || strcmp(key, "sensitivity_theta24_logspace") == 0) {
+        return parse_int(value, &cfg->sensitivity_theta24_logspace);
+    }
+    if (strcmp(key, "sensitivity.sin2_theta24_min") == 0 || strcmp(key, "sensitivity_sin2_theta24_min") == 0) {
+        return parse_double(value, &cfg->sensitivity_sin2_theta24_min);
+    }
+    if (strcmp(key, "sensitivity.sin2_theta24_max") == 0 || strcmp(key, "sensitivity_sin2_theta24_max") == 0) {
+        return parse_double(value, &cfg->sensitivity_sin2_theta24_max);
+    }
+    if (strcmp(key, "sensitivity.theta34_deg") == 0 || strcmp(key, "sensitivity_theta34_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_theta34_deg);
+    }
+    if (strcmp(key, "sensitivity.delta24_deg") == 0 || strcmp(key, "sensitivity_delta24_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_delta24_deg);
+    }
+    if (strcmp(key, "sensitivity.delta34_deg") == 0 || strcmp(key, "sensitivity_delta34_deg") == 0) {
+        return parse_double(value, &cfg->sensitivity_delta34_deg);
+    }
     if (strcmp(key, "inverse_random_samples") == 0) return parse_int(value, &cfg->inverse_random_samples);
     if (strcmp(key, "inverse_random_seed") == 0) return parse_int(value, &cfg->inverse_random_seed);
     if (strcmp(key, "inverse_random_mu_min_eV") == 0) return parse_double(value, &cfg->inverse_random_mu_min_eV);
@@ -896,6 +1054,7 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "inverse_construct_23_seed") == 0) return parse_int(value, &cfg->inverse_construct_23_seed);
     if (strcmp(key, "inverse_construct_23_dm41_min_eV2") == 0) return parse_double(value, &cfg->inverse_construct_23_dm41_min_eV2);
     if (strcmp(key, "inverse_construct_23_dm41_max_eV2") == 0) return parse_double(value, &cfg->inverse_construct_23_dm41_max_eV2);
+    if (strcmp(key, "inverse_construct_23_dm41_logspace") == 0) return parse_int(value, &cfg->inverse_construct_23_dm41_logspace);
     if (strcmp(key, "inverse_construct_23_zeta_norm_min") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_norm_min);
     if (strcmp(key, "inverse_construct_23_zeta_norm_max") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_norm_max);
     if (strcmp(key, "inverse_construct_23_zeta_direction_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_23_zeta_direction_min_deg);
@@ -928,6 +1087,28 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
     if (strcmp(key, "inverse_construct_23_M1_max_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M1_max_GeV);
     if (strcmp(key, "inverse_construct_23_M2_min_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M2_min_GeV);
     if (strcmp(key, "inverse_construct_23_M2_max_GeV") == 0) return parse_double(value, &cfg->inverse_construct_23_M2_max_GeV);
+    if (strcmp(key, "inverse_construct_24_samples") == 0) return parse_int(value, &cfg->inverse_construct_24_samples);
+    if (strcmp(key, "inverse_construct_24_seed") == 0) return parse_int(value, &cfg->inverse_construct_24_seed);
+    if (strcmp(key, "inverse_construct_24_dm41_min_eV2") == 0) return parse_double(value, &cfg->inverse_construct_24_dm41_min_eV2);
+    if (strcmp(key, "inverse_construct_24_dm41_max_eV2") == 0) return parse_double(value, &cfg->inverse_construct_24_dm41_max_eV2);
+    if (strcmp(key, "inverse_construct_24_dm41_logspace") == 0) return parse_int(value, &cfg->inverse_construct_24_dm41_logspace);
+    if (strcmp(key, "inverse_construct_24_dm51_min_eV2") == 0) return parse_double(value, &cfg->inverse_construct_24_dm51_min_eV2);
+    if (strcmp(key, "inverse_construct_24_dm51_max_eV2") == 0) return parse_double(value, &cfg->inverse_construct_24_dm51_max_eV2);
+    if (strcmp(key, "inverse_construct_24_dm51_logspace") == 0) return parse_int(value, &cfg->inverse_construct_24_dm51_logspace);
+    if (strcmp(key, "inverse_construct_24_s1_min") == 0) return parse_double(value, &cfg->inverse_construct_24_s1_min);
+    if (strcmp(key, "inverse_construct_24_s1_max") == 0) return parse_double(value, &cfg->inverse_construct_24_s1_max);
+    if (strcmp(key, "inverse_construct_24_s2_min") == 0) return parse_double(value, &cfg->inverse_construct_24_s2_min);
+    if (strcmp(key, "inverse_construct_24_s2_max") == 0) return parse_double(value, &cfg->inverse_construct_24_s2_max);
+    if (strcmp(key, "inverse_construct_24_v_angle_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_v_angle_min_deg);
+    if (strcmp(key, "inverse_construct_24_v_angle_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_v_angle_max_deg);
+    if (strcmp(key, "inverse_construct_24_w_angle_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_w_angle_min_deg);
+    if (strcmp(key, "inverse_construct_24_w_angle_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_w_angle_max_deg);
+    if (strcmp(key, "inverse_construct_24_phase_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_phase_min_deg);
+    if (strcmp(key, "inverse_construct_24_phase_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_phase_max_deg);
+    if (strcmp(key, "inverse_construct_24_alpha21_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_alpha21_min_deg);
+    if (strcmp(key, "inverse_construct_24_alpha21_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_alpha21_max_deg);
+    if (strcmp(key, "inverse_construct_24_alpha31_min_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_alpha31_min_deg);
+    if (strcmp(key, "inverse_construct_24_alpha31_max_deg") == 0) return parse_double(value, &cfg->inverse_construct_24_alpha31_max_deg);
 
 
     if (strcmp(key, "inverse_nufit_theta12_deg") == 0) return parse_double(value, &cfg->inverse_nufit_theta12_deg);
@@ -1011,6 +1192,12 @@ static int set_key_value(SimulationConfig *cfg, const char *key, const char *val
         return 0;
     }
 
+    if (strcmp(key, "output_inverse_construct_24_csv_path") == 0) {
+        strncpy(cfg->output_inverse_construct_24_csv_path, value, sizeof(cfg->output_inverse_construct_24_csv_path) - 1);
+        cfg->output_inverse_construct_24_csv_path[sizeof(cfg->output_inverse_construct_24_csv_path) - 1] = '\0';
+        return 0;
+    }
+
     if (strcmp(key, "inverse_kept_points_dir") == 0) {
         strncpy(cfg->inverse_kept_points_dir, value, sizeof(cfg->inverse_kept_points_dir) - 1);
         cfg->inverse_kept_points_dir[sizeof(cfg->inverse_kept_points_dir) - 1] = '\0';
@@ -1081,6 +1268,42 @@ static int finalize_config(SimulationConfig *cfg) {
     if (cfg->dune_source_model[0] == '\0') {
         strncpy(cfg->dune_source_model, "uniform", sizeof(cfg->dune_source_model) - 1);
     }
+    if (cfg->sensitivity_detector_mode[0] == '\0') {
+        strncpy(cfg->sensitivity_detector_mode, "ND+FD", sizeof(cfg->sensitivity_detector_mode) - 1);
+    }
+    if (cfg->sensitivity_asimov_mode[0] == '\0') {
+        strncpy(cfg->sensitivity_asimov_mode, "standard3nu", sizeof(cfg->sensitivity_asimov_mode) - 1);
+    }
+    if (cfg->sensitivity_test_backend[0] == '\0') {
+        strncpy(cfg->sensitivity_test_backend, "iss23_points", sizeof(cfg->sensitivity_test_backend) - 1);
+    }
+    if (cfg->sensitivity_source_model[0] == '\0') {
+        strncpy(cfg->sensitivity_source_model, "dk2nu", sizeof(cfg->sensitivity_source_model) - 1);
+    }
+    if (cfg->sensitivity_scan_plane[0] == '\0') {
+        strncpy(cfg->sensitivity_scan_plane, "theta24_dm41", sizeof(cfg->sensitivity_scan_plane) - 1);
+    }
+    if (cfg->sensitivity_minimizer_max_iter <= 0) {
+        cfg->sensitivity_minimizer_max_iter = 250;
+    }
+    if (cfg->sensitivity_minimizer_tolerance <= 0.0) {
+        cfg->sensitivity_minimizer_tolerance = 1.0e-5;
+    }
+    if (cfg->sensitivity_poisson_epsilon <= 0.0) {
+        cfg->sensitivity_poisson_epsilon = 1.0e-12;
+    }
+    if (cfg->sensitivity_dm41_min_eV2 <= 0.0) cfg->sensitivity_dm41_min_eV2 = 0.1;
+    if (cfg->sensitivity_dm41_max_eV2 <= cfg->sensitivity_dm41_min_eV2) cfg->sensitivity_dm41_max_eV2 = 100.0;
+    if (cfg->sensitivity_dm41_points <= 0) cfg->sensitivity_dm41_points = 50;
+    if (cfg->sensitivity_point_offset < 0) cfg->sensitivity_point_offset = 0;
+    if (cfg->sensitivity_theta14_max_deg <= cfg->sensitivity_theta14_min_deg) cfg->sensitivity_theta14_max_deg = 12.0;
+    if (cfg->sensitivity_theta14_points <= 0) cfg->sensitivity_theta14_points = 40;
+    if (cfg->sensitivity_sin2_theta14_min <= 0.0) cfg->sensitivity_sin2_theta14_min = 1.0e-4;
+    if (cfg->sensitivity_sin2_theta14_max <= cfg->sensitivity_sin2_theta14_min) cfg->sensitivity_sin2_theta14_max = 1.0e-1;
+    if (cfg->sensitivity_theta24_max_deg <= cfg->sensitivity_theta24_min_deg) cfg->sensitivity_theta24_max_deg = 12.0;
+    if (cfg->sensitivity_theta24_points <= 0) cfg->sensitivity_theta24_points = 40;
+    if (cfg->sensitivity_sin2_theta24_min <= 0.0) cfg->sensitivity_sin2_theta24_min = 1.0e-5;
+    if (cfg->sensitivity_sin2_theta24_max <= cfg->sensitivity_sin2_theta24_min) cfg->sensitivity_sin2_theta24_max = 1.0e-1;
 
     if (cfg->matter_density_g_cm3 <= 0.0 ||
         cfg->matter_electron_fraction < 0.0 || cfg->matter_electron_fraction > 1.0 ||
@@ -1354,6 +1577,11 @@ static int finalize_config(SimulationConfig *cfg) {
             cfg->inverse_construct_23_zeta_direction_max_deg = 360.0;
         }
 
+        if (cfg->inverse_construct_23_zeta_phase_min_deg == 0.0 && cfg->inverse_construct_23_zeta_phase_max_deg == 0.0) {
+            cfg->inverse_construct_23_zeta_phase_min_deg = 0.0;
+            cfg->inverse_construct_23_zeta_phase_max_deg = 360.0;
+        }
+
         if (cfg->inverse_construct_23_alpha21_min_deg == 0.0 && cfg->inverse_construct_23_alpha21_max_deg == 0.0) {
             cfg->inverse_construct_23_alpha21_min_deg = 0.0;
             cfg->inverse_construct_23_alpha21_max_deg = 360.0;
@@ -1422,6 +1650,7 @@ static int finalize_config(SimulationConfig *cfg) {
             cfg->inverse_construct_23_zeta_norm_min < 0.0 || cfg->inverse_construct_23_zeta_norm_max < cfg->inverse_construct_23_zeta_norm_min ||
             cfg->inverse_construct_23_zeta_norm_max >= 1.0 ||
             cfg->inverse_construct_23_zeta_direction_max_deg < cfg->inverse_construct_23_zeta_direction_min_deg ||
+            cfg->inverse_construct_23_zeta_phase_max_deg < cfg->inverse_construct_23_zeta_phase_min_deg ||
             cfg->inverse_construct_23_alpha21_max_deg < cfg->inverse_construct_23_alpha21_min_deg ||
             cfg->inverse_construct_23_alpha31_max_deg < cfg->inverse_construct_23_alpha31_min_deg ||
             cfg->inverse_construct_23_f11_min < 0.0 || cfg->inverse_construct_23_f11_max < cfg->inverse_construct_23_f11_min ||
@@ -1438,6 +1667,115 @@ static int finalize_config(SimulationConfig *cfg) {
             cfg->inverse_construct_23_kappa_f_max <= 0.0 ||
             cfg->inverse_construct_23_M1_min_GeV <= 0.0 || cfg->inverse_construct_23_M1_max_GeV < cfg->inverse_construct_23_M1_min_GeV ||
             cfg->inverse_construct_23_M2_min_GeV <= 0.0 || cfg->inverse_construct_23_M2_max_GeV < cfg->inverse_construct_23_M2_min_GeV) {
+            return 4;
+        }
+    }
+
+    if (cfg->operation == OPERATION_INVERSE_CONSTRUCT_24_3P2) {
+        if (cfg->inverse_construct_24_samples <= 0) {
+            cfg->inverse_construct_24_samples = 10000;
+        }
+
+        if (cfg->inverse_kept_points_dir[0] == '\0') {
+            strncpy(cfg->inverse_kept_points_dir,
+                    "data/inverse_seesaw/3p2/inverse_construct_24_kept_points",
+                    sizeof(cfg->inverse_kept_points_dir) - 1);
+        }
+
+        if (cfg->inverse_clear_kept_points_dir != 0) {
+            cfg->inverse_clear_kept_points_dir = 1;
+        }
+
+        if (cfg->output_inverse_construct_24_csv_path[0] == '\0') {
+            strncpy(cfg->output_inverse_construct_24_csv_path,
+                    "data/inverse_seesaw/3p2/inverse_construct_24_kept_points/inverse_construct_24_kept_points.csv",
+                    sizeof(cfg->output_inverse_construct_24_csv_path) - 1);
+        }
+
+        if (cfg->inverse_construct_24_dm41_min_eV2 <= 0.0 && cfg->inverse_construct_24_dm41_max_eV2 <= 0.0) {
+            cfg->inverse_construct_24_dm41_min_eV2 = 0.1;
+            cfg->inverse_construct_24_dm41_max_eV2 = 100.0;
+        }
+        if (cfg->inverse_construct_24_dm51_min_eV2 <= 0.0 && cfg->inverse_construct_24_dm51_max_eV2 <= 0.0) {
+            cfg->inverse_construct_24_dm51_min_eV2 = 0.1;
+            cfg->inverse_construct_24_dm51_max_eV2 = 100.0;
+        }
+        if (cfg->inverse_construct_24_s1_min == 0.0 && cfg->inverse_construct_24_s1_max == 0.0) {
+            cfg->inverse_construct_24_s1_min = 0.0;
+            cfg->inverse_construct_24_s1_max = 0.5;
+        }
+        if (cfg->inverse_construct_24_s2_min == 0.0 && cfg->inverse_construct_24_s2_max == 0.0) {
+            cfg->inverse_construct_24_s2_min = 0.0;
+            cfg->inverse_construct_24_s2_max = 0.5;
+        }
+        if (cfg->inverse_construct_24_v_angle_min_deg == 0.0 && cfg->inverse_construct_24_v_angle_max_deg == 0.0) {
+            cfg->inverse_construct_24_v_angle_min_deg = 0.0;
+            cfg->inverse_construct_24_v_angle_max_deg = 90.0;
+        }
+        if (cfg->inverse_construct_24_w_angle_min_deg == 0.0 && cfg->inverse_construct_24_w_angle_max_deg == 0.0) {
+            cfg->inverse_construct_24_w_angle_min_deg = 0.0;
+            cfg->inverse_construct_24_w_angle_max_deg = 90.0;
+        }
+        if (cfg->inverse_construct_24_phase_min_deg == 0.0 && cfg->inverse_construct_24_phase_max_deg == 0.0) {
+            cfg->inverse_construct_24_phase_min_deg = 0.0;
+            cfg->inverse_construct_24_phase_max_deg = 360.0;
+        }
+        if (cfg->inverse_construct_24_alpha21_min_deg == 0.0 && cfg->inverse_construct_24_alpha21_max_deg == 0.0) {
+            cfg->inverse_construct_24_alpha21_min_deg = 0.0;
+            cfg->inverse_construct_24_alpha21_max_deg = 360.0;
+        }
+        if (cfg->inverse_construct_24_alpha31_min_deg == 0.0 && cfg->inverse_construct_24_alpha31_max_deg == 0.0) {
+            cfg->inverse_construct_24_alpha31_min_deg = 0.0;
+            cfg->inverse_construct_24_alpha31_max_deg = 360.0;
+        }
+
+        if (cfg->inverse_construct_24_samples <= 0 ||
+            cfg->inverse_construct_24_dm41_min_eV2 <= 0.0 ||
+            cfg->inverse_construct_24_dm41_max_eV2 < cfg->inverse_construct_24_dm41_min_eV2 ||
+            cfg->inverse_construct_24_dm51_min_eV2 <= 0.0 ||
+            cfg->inverse_construct_24_dm51_max_eV2 < cfg->inverse_construct_24_dm51_min_eV2 ||
+            cfg->inverse_construct_24_s1_min < 0.0 || cfg->inverse_construct_24_s1_max < cfg->inverse_construct_24_s1_min ||
+            cfg->inverse_construct_24_s2_min < 0.0 || cfg->inverse_construct_24_s2_max < cfg->inverse_construct_24_s2_min ||
+            cfg->inverse_construct_24_s1_max >= 1.0 || cfg->inverse_construct_24_s2_max >= 1.0 ||
+            cfg->inverse_construct_24_v_angle_max_deg < cfg->inverse_construct_24_v_angle_min_deg ||
+            cfg->inverse_construct_24_w_angle_max_deg < cfg->inverse_construct_24_w_angle_min_deg ||
+            cfg->inverse_construct_24_phase_max_deg < cfg->inverse_construct_24_phase_min_deg ||
+            cfg->inverse_construct_24_alpha21_max_deg < cfg->inverse_construct_24_alpha21_min_deg ||
+            cfg->inverse_construct_24_alpha31_max_deg < cfg->inverse_construct_24_alpha31_min_deg ||
+            cfg->output_inverse_construct_24_csv_path[0] == '\0') {
+            return 4;
+        }
+    }
+
+    if (cfg->operation == OPERATION_DUNE_BASELINE_EFFECTS_SENSITIVITY) {
+        if (cfg->sensitivity_points_index_csv[0] == '\0' &&
+            strcmp(cfg->sensitivity_test_backend, "analytic_3p1") != 0) {
+            strncpy(cfg->sensitivity_points_index_csv,
+                    cfg->dune_theory_index_csv[0] ? cfg->dune_theory_index_csv : "data/inverse_seesaw/3p1/theory_points_index.csv",
+                    sizeof(cfg->sensitivity_points_index_csv) - 1);
+            cfg->sensitivity_points_index_csv[sizeof(cfg->sensitivity_points_index_csv) - 1] = '\0';
+        }
+        if (cfg->sensitivity_output_csv[0] == '\0') {
+            strncpy(cfg->sensitivity_output_csv,
+                    "data/dune/sensitivity/baseline_effects_sensitivity.csv",
+                    sizeof(cfg->sensitivity_output_csv) - 1);
+            cfg->sensitivity_output_csv[sizeof(cfg->sensitivity_output_csv) - 1] = '\0';
+        }
+        if (cfg->sensitivity_nd_dk2nu_flux_z_fhc_file[0] == '\0' && cfg->dune_dk2nu_flux_z_fhc_file[0] != '\0') {
+            strncpy(cfg->sensitivity_nd_dk2nu_flux_z_fhc_file,
+                    cfg->dune_dk2nu_flux_z_fhc_file,
+                    sizeof(cfg->sensitivity_nd_dk2nu_flux_z_fhc_file) - 1);
+        }
+        if (cfg->sensitivity_nd_dk2nu_flux_z_rhc_file[0] == '\0' && cfg->dune_dk2nu_flux_z_rhc_file[0] != '\0') {
+            strncpy(cfg->sensitivity_nd_dk2nu_flux_z_rhc_file,
+                    cfg->dune_dk2nu_flux_z_rhc_file,
+                    sizeof(cfg->sensitivity_nd_dk2nu_flux_z_rhc_file) - 1);
+        }
+        if (cfg->sensitivity_max_points < 0 ||
+            cfg->sensitivity_minimizer_max_iter <= 0 ||
+            cfg->sensitivity_minimizer_tolerance <= 0.0 ||
+            (strcmp(cfg->sensitivity_test_backend, "analytic_3p1") != 0 && cfg->sensitivity_points_index_csv[0] == '\0') ||
+            cfg->sensitivity_output_csv[0] == '\0') {
             return 4;
         }
     }
@@ -1587,12 +1925,16 @@ const char *operation_to_string(SimulationOperation operation) {
             return "inverse_pmns_filter_3p2";
         case OPERATION_INVERSE_CONSTRUCT_23_3P1:
             return "inverse_construct_23_3p1";
+        case OPERATION_INVERSE_CONSTRUCT_24_3P2:
+            return "inverse_construct_24_3p2";
         case OPERATION_DUNE_ND_PREDICT_SPECTRUM:
             return "dune_nd_predict_spectrum";
         case OPERATION_DUNE_FD_FIG4_VALIDATION:
             return "dune_fd_fig4_validation";
         case OPERATION_DUNE_ND_FIG4_SOURCE_LINE:
             return "dune_nd_fig4_source_line";
+        case OPERATION_DUNE_BASELINE_EFFECTS_SENSITIVITY:
+            return "dune_baseline_effects_sensitivity";
         default:
             return "unset";
     }

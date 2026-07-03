@@ -6,6 +6,7 @@
 #include "inverse_seesaw/oscillation.h"
 #include "dune/xsec.h"
 #include "dune/theory.h"
+#include "dune_sensitivity/baseline_effects.h"
 
 #include <ctype.h>
 #include <complex.h>
@@ -62,6 +63,14 @@ typedef struct {
     double values[FD_MAX_BINS];
     int n;
 } Vector;
+
+typedef struct {
+    char smear[64];
+    char eff[64];
+    int loaded;
+    SmearingMatrix smear_matrix;
+    Vector efficiency;
+} FdResponseCacheEntry;
 
 static const FdChannel CHANNEL_FHC_APP_SIGNAL[] = {
     {"FHC", 1, 0, 1, "app_nue_sig", "post_app_FHC_nue_sig", 0},
@@ -406,19 +415,23 @@ static double channel_probability_with_source_profile(
 
     double weighted = 0.0;
     double denom = 0.0;
-    for (int i = 0; i < source_profile->n_rows; ++i) {
+    int first_row = 0;
+    int n_rows = 0;
+    if (!dune_dk2nu_flux_z_find_energy_bin(source_profile,
+                                           flux_flavor,
+                                           energy_GeV,
+                                           &first_row,
+                                           &n_rows,
+                                           &denom)) {
+        denom = 0.0;
+    }
+    for (int i = first_row; i < first_row + n_rows; ++i) {
         const DuneDk2nuFluxZRow *row = &source_profile->rows[i];
-        if (row->flavor != flux_flavor ||
-            energy_GeV < row->e_low_GeV ||
-            energy_GeV >= row->e_high_GeV) {
-            continue;
-        }
         const double z_m = 0.5 * (row->z_low_m + row->z_high_m);
         double baseline_km = FD_BASELINE_KM - z_m * 1.0e-3;
         if (baseline_km < 0.0) baseline_km = 0.0;
         weighted += row->weight *
                     channel_probability_at_baseline(channel, point, energy_GeV, baseline_km, use_matter);
-        denom += row->weight;
     }
 
     if (denom <= 0.0) {
@@ -461,6 +474,64 @@ static double eval_xsec_value(const DuneXsecTable *table, DuneFluxFlavor flavor,
     return sigma_over_e * energy_GeV * XSEC_SCALE_CM2;
 }
 
+
+static double fd_source_flux_value(
+    const DuneFluxTable *flux_table,
+    const DuneDk2nuFluxZTable *source_profile,
+    DuneFluxFlavor flavor,
+    double energy_GeV) {
+    if (source_profile && source_profile->rows) {
+        const double dk2nu_flux = dune_dk2nu_flux_z_weight_sum(source_profile, flavor, energy_GeV);
+        if (dk2nu_flux > 0.0) {
+            return dk2nu_flux;
+        }
+    }
+    return eval_flux_value(flux_table, flavor, energy_GeV);
+}
+
+static int get_cached_response(
+    const FdChannel *channel,
+    const SmearingMatrix **smear_out,
+    const Vector **eff_out) {
+    enum { MAX_RESPONSE_CACHE = 64 };
+    static FdResponseCacheEntry cache[MAX_RESPONSE_CACHE];
+    static int n_cache = 0;
+
+    for (int i = 0; i < n_cache; ++i) {
+        if (strcmp(cache[i].smear, channel->smear) == 0 &&
+            strcmp(cache[i].eff, channel->eff) == 0) {
+            *smear_out = &cache[i].smear_matrix;
+            *eff_out = &cache[i].efficiency;
+            return 0;
+        }
+    }
+    if (n_cache >= MAX_RESPONSE_CACHE) {
+        return 1;
+    }
+    FdResponseCacheEntry *entry = &cache[n_cache++];
+    memset(entry, 0, sizeof(*entry));
+    strncpy(entry->smear, channel->smear, sizeof(entry->smear) - 1);
+    strncpy(entry->eff, channel->eff, sizeof(entry->eff) - 1);
+
+    char path[512];
+    char filename[128];
+    snprintf(filename, sizeof(filename), "%s.txt", channel->smear);
+    path_join(path, sizeof(path), GLOBES_BASE, "smr", filename);
+    if (read_smearing(path, &entry->smear_matrix) != 0) {
+        return 1;
+    }
+
+    snprintf(filename, sizeof(filename), "%s.txt", channel->eff);
+    path_join(path, sizeof(path), GLOBES_BASE, "eff", filename);
+    if (read_first_brace_vector(path, &entry->efficiency) != 0) {
+        return 1;
+    }
+    entry->loaded = 1;
+    *smear_out = &entry->smear_matrix;
+    *eff_out = &entry->efficiency;
+    return 0;
+}
+
 static double compute_channel_reco(
     const FdChannel *channel,
     const DuneTheoryPoint *point,
@@ -477,22 +548,9 @@ static double compute_channel_reco(
     int *out_n_025,
     int use_matter,
     const DuneDk2nuFluxZTable *source_profile) {
-    char path[512];
-    char filename[128];
-    snprintf(filename, sizeof(filename), "%s.txt", channel->smear);
-    path_join(path, sizeof(path), GLOBES_BASE, "smr", filename);
-    SmearingMatrix *smear = (SmearingMatrix *)calloc(1, sizeof(*smear));
-    if (!smear) return 1;
-    if (read_smearing(path, smear) != 0) {
-        free(smear);
-        return 1;
-    }
-
-    snprintf(filename, sizeof(filename), "%s.txt", channel->eff);
-    path_join(path, sizeof(path), GLOBES_BASE, "eff", filename);
-    Vector eff;
-    if (read_first_brace_vector(path, &eff) != 0) {
-        free(smear);
+    const SmearingMatrix *smear = NULL;
+    const Vector *eff = NULL;
+    if (get_cached_response(channel, &smear, &eff) != 0) {
         return 1;
     }
 
@@ -512,7 +570,7 @@ static double compute_channel_reco(
             true_counts[i] = 0.0;
             continue;
         }
-        const double flux = eval_flux_value(flux_table, flux_flavor, energy) / M2_TO_CM2;
+        const double flux = fd_source_flux_value(flux_table, source_profile, flux_flavor, energy) / M2_TO_CM2;
         const double xsec = eval_xsec_value(xsec_table, xsec_flavor, energy);
         const double prob = channel_probability_with_source_profile(
             channel,
@@ -531,7 +589,7 @@ static double compute_channel_reco(
         for (int t = 0; t < smear->n_cols && t < n_sampling; ++t) {
             sum += smear->matrix[r][t] * true_counts[t];
         }
-        reco[r] = sum * (r < eff.n ? eff.values[r] : 0.0);
+        reco[r] = sum * (r < eff->n ? eff->values[r] : 0.0);
     }
 
     int n = 0;
@@ -539,7 +597,6 @@ static double compute_channel_reco(
         out_025[n++] = reco[r] + reco[r + 1];
     }
     *out_n_025 = n;
-    free(smear);
     return 0;
 }
 
@@ -865,5 +922,260 @@ int run_dune_fd_fig4_validation(const SimulationConfig *cfg) {
             matter_csv);
     dune_dk2nu_flux_z_free(&fhc_source_profile);
     dune_dk2nu_flux_z_free(&rhc_source_profile);
+    return 0;
+}
+
+int dune_fd_fig4_build_sensitivity_rows(
+    const SimulationConfig *cfg,
+    const DuneTheoryPoint *asimov,
+    const DuneTheoryPoint *test,
+    DuneSensitivitySpectrumBin *out_rows,
+    int max_rows,
+    int *out_count) {
+    if (!cfg || !asimov || !test || !out_rows || !out_count || max_rows <= 0) {
+        return 1;
+    }
+    *out_count = 0;
+
+    static Fig4Row rows[DUNE_FD_MAX_ROWS];
+    static int n_rows = 0;
+    static int rows_loaded = 0;
+    if (!rows_loaded) {
+        if (load_fig4_rows(rows, DUNE_FD_MAX_ROWS, &n_rows) != 0) {
+            fprintf(stderr, "DUNE sensitivity FD: impossible de lire %s\n", FIG4_INPUT_CSV);
+            return 1;
+        }
+        rows_loaded = 1;
+    }
+
+    char path[512];
+    static DuneFluxTable fhc_flux;
+    static DuneFluxTable rhc_flux;
+    static DuneXsecTable cc_xsec;
+    static DuneXsecTable nc_xsec;
+    static Vector rec_widths_vec;
+    static Vector sampling_widths_vec;
+    static double sampling_centers[FD_MAX_BINS];
+    static double sampling_edges[FD_MAX_BINS];
+    static double rec_centers[FD_MAX_BINS];
+    static double rec_edges[FD_MAX_BINS];
+    static int n_sampling = 0;
+    static int n_rec = 0;
+    static int common_loaded = 0;
+    if (!common_loaded) {
+        path_join(path, sizeof(path), GLOBES_BASE, "flux", "histos_g4lbne_v3r5p4_QGSP_BERT_OptimizedEngineeredNov2017_neutrino_LBNEFD_globes_flux.txt");
+        if (dune_flux_table_load_globes(path, &fhc_flux) != DUNE_STATUS_OK) {
+            fprintf(stderr, "DUNE sensitivity FD: flux FHC FD manquant: %s\n", path);
+            return 1;
+        }
+        path_join(path, sizeof(path), GLOBES_BASE, "flux", "histos_g4lbne_v3r5p4_QGSP_BERT_OptimizedEngineeredNov2017_antineutrino_LBNEFD_globes_flux.txt");
+        if (dune_flux_table_load_globes(path, &rhc_flux) != DUNE_STATUS_OK) {
+            fprintf(stderr, "DUNE sensitivity FD: flux RHC FD manquant: %s\n", path);
+            return 1;
+        }
+        path_join(path, sizeof(path), GLOBES_BASE, "xsec", "xsec_cc.dat");
+        if (dune_xsec_table_load_globes(path, &cc_xsec) != DUNE_STATUS_OK) {
+            fprintf(stderr, "DUNE sensitivity FD: xsec CC manquante: %s\n", path);
+            return 1;
+        }
+        path_join(path, sizeof(path), GLOBES_BASE, "xsec", "xsec_nc.dat");
+        if (dune_xsec_table_load_globes(path, &nc_xsec) != DUNE_STATUS_OK) {
+            fprintf(stderr, "DUNE sensitivity FD: xsec NC manquante: %s\n", path);
+            return 1;
+        }
+        path_join(path, sizeof(path), GLOBES_BASE, "", "DUNE_GLoBES.glb");
+        if (read_glb_vector(path, "$binsize", &rec_widths_vec) != 0 ||
+            read_glb_vector(path, "$sampling_stepsize", &sampling_widths_vec) != 0) {
+            fprintf(stderr, "DUNE sensitivity FD: impossible de lire binsize/sampling dans %s\n", path);
+            return 1;
+        }
+        n_sampling = build_centers(&sampling_widths_vec, sampling_centers, sampling_edges, FD_MAX_BINS);
+        n_rec = build_centers(&rec_widths_vec, rec_centers, rec_edges, FD_MAX_BINS);
+        common_loaded = 1;
+    }
+    if (n_sampling <= 0 || n_rec <= 0) {
+        return 1;
+    }
+
+    static DuneDk2nuFluxZTable fhc_source_profile;
+    static DuneDk2nuFluxZTable rhc_source_profile;
+    static int source_profile_loaded = 0;
+    static char loaded_source_fhc[256] = "";
+    static char loaded_source_rhc[256] = "";
+    DuneDk2nuFluxZTable *fhc_source_profile_ptr = NULL;
+    DuneDk2nuFluxZTable *rhc_source_profile_ptr = NULL;
+    int have_source_profile = 0;
+    if (strcmp(cfg->sensitivity_source_model, "dk2nu") == 0) {
+        const char *fhc_path = cfg->sensitivity_fd_dk2nu_flux_z_fhc_file[0]
+                                   ? cfg->sensitivity_fd_dk2nu_flux_z_fhc_file
+                                   : cfg->dune_dk2nu_flux_z_fhc_file;
+        const char *rhc_path = cfg->sensitivity_fd_dk2nu_flux_z_rhc_file[0]
+                                   ? cfg->sensitivity_fd_dk2nu_flux_z_rhc_file
+                                   : cfg->dune_dk2nu_flux_z_rhc_file;
+        if (source_profile_loaded &&
+            strcmp(loaded_source_fhc, fhc_path) == 0 &&
+            strcmp(loaded_source_rhc, rhc_path) == 0) {
+            fhc_source_profile_ptr = &fhc_source_profile;
+            rhc_source_profile_ptr = &rhc_source_profile;
+            have_source_profile = 1;
+        } else if (fhc_path && fhc_path[0] && rhc_path && rhc_path[0]) {
+            if (source_profile_loaded) {
+                dune_dk2nu_flux_z_free(&fhc_source_profile);
+                dune_dk2nu_flux_z_free(&rhc_source_profile);
+                source_profile_loaded = 0;
+            }
+            if (dune_dk2nu_flux_z_load_csv(fhc_path, &fhc_source_profile) == DUNE_STATUS_OK &&
+                dune_dk2nu_flux_z_load_csv(rhc_path, &rhc_source_profile) == DUNE_STATUS_OK) {
+                strncpy(loaded_source_fhc, fhc_path, sizeof(loaded_source_fhc) - 1);
+                strncpy(loaded_source_rhc, rhc_path, sizeof(loaded_source_rhc) - 1);
+                source_profile_loaded = 1;
+                fhc_source_profile_ptr = &fhc_source_profile;
+                rhc_source_profile_ptr = &rhc_source_profile;
+                have_source_profile = 1;
+            } else {
+                fprintf(stderr, "DUNE sensitivity FD: source dk2nu indisponible, fallback flux GLoBES + baseline fixe\n");
+                dune_dk2nu_flux_z_free(&fhc_source_profile);
+                dune_dk2nu_flux_z_free(&rhc_source_profile);
+            }
+        } else {
+            fprintf(stderr, "DUNE sensitivity FD: source dk2nu indisponible, fallback flux GLoBES + baseline fixe\n");
+        }
+    }
+
+    typedef struct {
+        char panel[32];
+        char component[32];
+        double asimov_values[FD_MAX_BINS];
+        double test_values[FD_MAX_BINS];
+        int n_asimov;
+        int n_test;
+    } ComponentCache;
+    ComponentCache cache[64];
+    int n_cache = 0;
+    const int use_matter = cfg->dune_matter_enabled != 0;
+    static ComponentCache asimov_component_cache[64];
+    static int n_asimov_component_cache = 0;
+    static int asimov_component_cache_valid = 0;
+    static char asimov_component_cache_key[1024] = "";
+    char current_asimov_key[1024];
+    snprintf(current_asimov_key,
+             sizeof(current_asimov_key),
+             "FD|%s|matter=%d|source=%s|%s|%s|%.12g|%.12g|%.12g|%.12g",
+             cfg->sensitivity_asimov_mode,
+             use_matter,
+             cfg->sensitivity_source_model,
+             loaded_source_fhc,
+             loaded_source_rhc,
+             asimov->dm21_eV2,
+             asimov->dm31_eV2,
+             asimov->dm41_eV2,
+             creal(asimov->mixing[0][2]));
+    const int can_cache_asimov = strcmp(cfg->sensitivity_asimov_mode, "standard3nu") == 0;
+    const int asimov_cache_hit =
+        can_cache_asimov &&
+        asimov_component_cache_valid &&
+        strcmp(asimov_component_cache_key, current_asimov_key) == 0;
+    if (can_cache_asimov && !asimov_cache_hit) {
+        n_asimov_component_cache = 0;
+        asimov_component_cache_valid = 0;
+    }
+
+    for (int i = 0; i < n_rows; ++i) {
+        ComponentCache *item = NULL;
+        for (int ic = 0; ic < n_cache; ++ic) {
+            if (strcmp(cache[ic].panel, rows[i].panel) == 0 &&
+                strcmp(cache[ic].component, rows[i].component) == 0) {
+                item = &cache[ic];
+                break;
+            }
+        }
+        if (!item && n_cache < (int)(sizeof(cache) / sizeof(cache[0]))) {
+            item = &cache[n_cache++];
+            memset(item, 0, sizeof(*item));
+            strncpy(item->panel, rows[i].panel, sizeof(item->panel) - 1);
+            strncpy(item->component, rows[i].component, sizeof(item->component) - 1);
+            const FdChannel *channels = NULL;
+            int n_channels = 0;
+            if (channel_group_for(rows[i].panel, rows[i].component, &channels, &n_channels) == 0) {
+                const ComponentCache *cached_asimov = NULL;
+                if (asimov_cache_hit) {
+                    for (int ac = 0; ac < n_asimov_component_cache; ++ac) {
+                        if (strcmp(asimov_component_cache[ac].panel, rows[i].panel) == 0 &&
+                            strcmp(asimov_component_cache[ac].component, rows[i].component) == 0) {
+                            cached_asimov = &asimov_component_cache[ac];
+                            break;
+                        }
+                    }
+                }
+                if (cached_asimov) {
+                    item->n_asimov = cached_asimov->n_asimov;
+                    memcpy(item->asimov_values,
+                           cached_asimov->asimov_values,
+                           sizeof(item->asimov_values));
+                }
+                for (int c = 0; c < n_channels; ++c) {
+                    const DuneDk2nuFluxZTable *source_profile =
+                        strcmp(channels[c].flux_mode, "RHC") == 0 ? rhc_source_profile_ptr : fhc_source_profile_ptr;
+                    double tmp_asimov[FD_MAX_BINS] = {0.0};
+                    double tmp_test[FD_MAX_BINS] = {0.0};
+                    int n_tmp_asimov = 0;
+                    int n_tmp_test = 0;
+                    if (!cached_asimov) {
+                        if (compute_channel_reco(&channels[c], asimov, &fhc_flux, &rhc_flux, &cc_xsec, &nc_xsec,
+                                                 sampling_centers, sampling_widths_vec.values, n_sampling,
+                                                 rec_edges, n_rec + 1, tmp_asimov, &n_tmp_asimov,
+                                                 use_matter, source_profile) == 0) {
+                            if (n_tmp_asimov > item->n_asimov) item->n_asimov = n_tmp_asimov;
+                            for (int k = 0; k < n_tmp_asimov; ++k) item->asimov_values[k] += tmp_asimov[k];
+                        }
+                    }
+                    if (compute_channel_reco(&channels[c], test, &fhc_flux, &rhc_flux, &cc_xsec, &nc_xsec,
+                                             sampling_centers, sampling_widths_vec.values, n_sampling,
+                                             rec_edges, n_rec + 1, tmp_test, &n_tmp_test,
+                                             use_matter, source_profile) == 0) {
+                        if (n_tmp_test > item->n_test) item->n_test = n_tmp_test;
+                        for (int k = 0; k < n_tmp_test; ++k) item->test_values[k] += tmp_test[k];
+                    }
+                }
+                if (can_cache_asimov &&
+                    !cached_asimov &&
+                    n_asimov_component_cache < (int)(sizeof(asimov_component_cache) / sizeof(asimov_component_cache[0]))) {
+                    asimov_component_cache[n_asimov_component_cache++] = *item;
+                }
+            }
+        }
+
+        if (!item || *out_count >= max_rows) {
+            return 2;
+        }
+        int bin_index = -1;
+        const int n_bins = item->n_asimov > item->n_test ? item->n_asimov : item->n_test;
+        for (int k = 0; k < n_bins; ++k) {
+            const double e = 0.125 + 0.25 * (double)k;
+            if (fabs(e - rows[i].energy_GeV) < 1e-9) {
+                bin_index = k;
+                break;
+            }
+        }
+        if (bin_index < 0) {
+            continue;
+        }
+        DuneSensitivitySpectrumBin *row = &out_rows[(*out_count)++];
+        memset(row, 0, sizeof(*row));
+        strncpy(row->detector, "FD", sizeof(row->detector) - 1);
+        strncpy(row->panel, rows[i].panel, sizeof(row->panel) - 1);
+        strncpy(row->component, rows[i].component, sizeof(row->component) - 1);
+        row->e_rec_GeV = rows[i].energy_GeV;
+        row->asimov_events = item->asimov_values[bin_index];
+        row->test_events = item->test_values[bin_index];
+    }
+
+    if (can_cache_asimov && !asimov_cache_hit) {
+        strncpy(asimov_component_cache_key, current_asimov_key, sizeof(asimov_component_cache_key) - 1);
+        asimov_component_cache_key[sizeof(asimov_component_cache_key) - 1] = '\0';
+        asimov_component_cache_valid = 1;
+    }
+
+    (void)have_source_profile;
     return 0;
 }

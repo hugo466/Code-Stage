@@ -224,6 +224,25 @@ static int eval_xsec(const DuneXsecTable *table, DuneFluxFlavor flavor, double e
     return 0;
 }
 
+
+static double source_flux_value(
+    const DuneFluxTable *flux_table,
+    const NdSourceAverage *source,
+    DuneFluxFlavor flavor,
+    double energy_GeV) {
+    if (source && source->model == ND_SOURCE_DK2NU && source->dk2nu && source->dk2nu->rows) {
+        const double dk2nu_flux = dune_dk2nu_flux_z_weight_sum(source->dk2nu, flavor, energy_GeV);
+        if (dk2nu_flux > 0.0) {
+            return dk2nu_flux;
+        }
+    }
+    double flux = 0.0;
+    if (eval_flux(flux_table, flavor, energy_GeV, &flux) != 0) {
+        return 0.0;
+    }
+    return flux;
+}
+
 static double cc_rate(
     const DuneFluxTable *flux_table,
     const DuneXsecTable *cc_table,
@@ -236,10 +255,9 @@ static double cc_rate(
     const NdSourceAverage *source,
     double width_GeV,
     int use_oscillation) {
-    double flux = 0.0;
+    const double flux = source_flux_value(flux_table, source, initial, energy_GeV);
     double xsec = 0.0;
-    if (eval_flux(flux_table, initial, energy_GeV, &flux) != 0 ||
-        eval_xsec(cc_table, final_flavor, energy_GeV, &xsec) != 0) {
+    if (flux <= 0.0 || eval_xsec(cc_table, final_flavor, energy_GeV, &xsec) != 0) {
         return 0.0;
     }
     const double p = use_oscillation
@@ -258,10 +276,9 @@ static double nc_rate_for_initial(
     const NdSourceAverage *source,
     double width_GeV,
     int use_oscillation) {
-    double flux = 0.0;
+    const double flux = source_flux_value(flux_table, source, initial, energy_GeV);
     double xsec = 0.0;
-    if (eval_flux(flux_table, initial, energy_GeV, &flux) != 0 ||
-        eval_xsec(nc_table, initial, energy_GeV, &xsec) != 0) {
+    if (flux <= 0.0 || eval_xsec(nc_table, initial, energy_GeV, &xsec) != 0) {
         return 0.0;
     }
     const double p_active = use_oscillation ? active_probability_iss23(point, initial, alpha, energy_GeV, source) : 1.0;

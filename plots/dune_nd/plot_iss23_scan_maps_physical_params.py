@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import argparse
 
 ROOT = Path(__file__).resolve().parents[2]
 MPLCONFIGDIR = ROOT / ".matplotlib_cache"
@@ -13,17 +14,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import LogNorm
+from matplotlib.colors import Normalize
 
 
-POINTS_CSV = ROOT / "data" / "inverse_seesaw" / "3p1" / "inverse_construct_23_kept_points_lowdm_to_100" / "inverse_construct_23_kept_points_lowdm_to_100.csv"
-SUMMARY_CSV = ROOT / "data" / "dune_nd" / "scan_maps" / "iss23_active3nu_max_event_ratio_map_lowdm_to_100_cprob.csv"
-SOURCE_PROFILE_FHC = ROOT / "data" / "dune" / "dk2nu" / "source_profile_z_FHC_ND.csv"
-SOURCE_PROFILE_RHC = ROOT / "data" / "dune" / "dk2nu" / "source_profile_z_RHC_ND.csv"
-OUT_THETA24 = ROOT / "figures" / "dune_nd" / "scan_maps" / "iss23_scan_map_theta24.png"
-OUT_MIXING = ROOT / "figures" / "dune_nd" / "scan_maps" / "iss23_scan_map_mixing_observables.png"
-OUT_AMPLITUDE = ROOT / "figures" / "dune_nd" / "scan_maps" / "iss23_max_event_ratio_vs_expected_amplitude.png"
-OUT_PROB_AMPLITUDE = ROOT / "figures" / "dune_nd" / "scan_maps" / "iss23_max_event_ratio_vs_dk2nu_probability_amplitude.png"
+POINTS_CSV = ROOT / "data" / "inverse_seesaw" / "3p1" / "inverse_construct_23_kept_points" / "inverse_construct_23_kept_points.csv"
+SUMMARY_CSV = ROOT / "data" / "dune_nd" / "scan_maps" / "iss23_active3nu_max_event_ratio_map.csv"
+SOURCE_PROFILE_FHC = ROOT / "data" / "dune" / "dk2nu" / "flux_z_FHC_ND_raw.csv"
+SOURCE_PROFILE_RHC = ROOT / "data" / "dune" / "dk2nu" / "flux_z_RHC_ND_raw.csv"
+OUT_THETA24 = ROOT / "figures" / "dune_nd" / "iss23" / "scan_maps" / "iss23_scan_map_theta24.png"
+OUT_MIXING = ROOT / "figures" / "dune_nd" / "iss23" / "scan_maps" / "iss23_scan_map_mixing_observables.png"
+OUT_AMPLITUDE = ROOT / "figures" / "dune_nd" / "iss23" / "scan_maps" / "iss23_max_event_ratio_vs_expected_amplitude.png"
+OUT_PROB_AMPLITUDE = ROOT / "figures" / "dune_nd" / "iss23" / "scan_maps" / "iss23_max_event_ratio_vs_dk2nu_probability_amplitude.png"
 
 BASELINE_KM = 0.574
 PHASE_COEFF = 1.267
@@ -45,6 +46,14 @@ def load_merged_table(points_csv: Path, summary_csv: Path) -> pd.DataFrame:
         points[col] = pd.to_numeric(points[col], errors="coerce").fillna(0).astype(int)
 
     points = points[(points["pmns_pass"] == 1) & (points["eta_pass"] == 1)].copy()
+    mixing_columns = [f"U_solver_{r}{c}" for r in range(1, 5) for c in range(1, 5)]
+    complex_mixing_columns = [
+        name
+        for r in range(1, 5)
+        for c in range(1, 5)
+        for name in (f"U_solver_re_{r}{c}", f"U_solver_im_{r}{c}", f"U_solver_phase_deg_{r}{c}")
+        if name in points.columns
+    ]
     merged = summary.merge(
         points[
             [
@@ -52,7 +61,8 @@ def load_merged_table(points_csv: Path, summary_csv: Path) -> pd.DataFrame:
                 "dm21_calc_eV2",
                 "dm31_calc_eV2",
                 "dm41_calc_eV2",
-                *[f"U_solver_{r}{c}" for r in range(1, 5) for c in range(1, 5)],
+                *mixing_columns,
+                *complex_mixing_columns,
             ]
         ],
         on=["point_id", "dm41_calc_eV2"],
@@ -77,21 +87,25 @@ def load_merged_table(points_csv: Path, summary_csv: Path) -> pd.DataFrame:
             "Umu4_sq",
             "appearance_amplitude",
             "disappearance_amplitude",
-            *[f"U_solver_{r}{c}" for r in range(1, 5) for c in range(1, 5)],
+            *mixing_columns,
         ]
     ).copy()
 
 
-def color_norm(df: pd.DataFrame) -> LogNorm | None:
+def color_norm(df: pd.DataFrame) -> Normalize | None:
     cols = [f"{panel}_max_abs_percent" for panel in PANELS]
     values = df[cols].to_numpy(dtype=float)
-    positive = values[np.isfinite(values) & (values > 0.0)]
-    if positive.size == 0:
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
         return None
-    return LogNorm(vmin=float(np.nanmin(positive)), vmax=float(np.nanmax(positive)))
+    vmin = float(np.nanmin(finite))
+    vmax = float(np.nanmax(finite))
+    if vmax <= vmin:
+        vmax = vmin + 1.0e-12
+    return Normalize(vmin=vmin, vmax=vmax)
 
 
-def scatter_panel(ax, df: pd.DataFrame, panel: str, y_col: str, y_label: str, norm: LogNorm | None) -> None:
+def scatter_panel(ax, df: pd.DataFrame, panel: str, y_col: str, y_label: str, norm: Normalize | None, x_log: bool = False) -> None:
     image = ax.scatter(
         df["dm41_calc_eV2"],
         df[y_col],
@@ -106,10 +120,12 @@ def scatter_panel(ax, df: pd.DataFrame, panel: str, y_col: str, y_label: str, no
     ax.set_xlabel(r"$\Delta m^2_{41}$ [eV$^2$]")
     ax.set_ylabel(y_label)
     ax.grid(alpha=0.25)
+    if x_log:
+        ax.set_xscale("log")
     return image
 
 
-def draw_figure(df: pd.DataFrame, out_path: Path, mode: str) -> None:
+def draw_figure(df: pd.DataFrame, out_path: Path, mode: str, x_log: bool = False) -> None:
     fig, axes = plt.subplots(2, 2, figsize=(11.2, 8.8), sharex=True)
     norm = color_norm(df)
     image = None
@@ -125,16 +141,16 @@ def draw_figure(df: pd.DataFrame, out_path: Path, mode: str) -> None:
             else:
                 y_col = "Umu4_sq"
                 y_label = r"$|U_{\mu4}|^2$"
-        image = scatter_panel(ax, df, panel, y_col, y_label, norm)
+        image = scatter_panel(ax, df, panel, y_col, y_label, norm, x_log=x_log)
 
     if image is not None:
         cbar = fig.colorbar(image, ax=axes.ravel().tolist(), pad=0.02)
         cbar.set_label(r"$\max_E |N_{4\nu}/N_{active3\nu}-1|$ [%]")
 
     if mode == "theta24":
-        title = rf"DUNE ND 6.5 yr/mode - scan map in $(\Delta m^2_{{41}}, \theta_{{24}})$ ({len(df)} points)"
+        title = rf"DUNE ND 6.5 yr/mode - scan map ({len(df)} points)"
     else:
-        title = rf"DUNE ND 6.5 yr/mode - scan maps in oscillation-relevant mixings ({len(df)} points)"
+        title = rf"DUNE ND 6.5 yr/mode - scan maps ({len(df)} points)"
     fig.suptitle(title, fontsize=13, fontweight="bold")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=240, bbox_inches="tight")
@@ -203,7 +219,7 @@ def draw_amplitude_scaling(df: pd.DataFrame, out_path: Path) -> None:
                 )
             ax.legend(frameon=False, fontsize=8, loc="lower right")
 
-    fig.suptitle("DUNE ND 6.5 yr/mode - max event-ratio deviation vs expected sterile amplitude", fontsize=13, fontweight="bold")
+    fig.suptitle("DUNE ND 6.5 yr/mode - ISS(2,3)", fontsize=13, fontweight="bold")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=240, bbox_inches="tight")
     plt.close(fig)
@@ -229,10 +245,20 @@ def source_weights(profile: dict[tuple[str, float, float], tuple[np.ndarray, np.
 
 
 def mixing_array(df: pd.DataFrame) -> np.ndarray:
-    u = np.zeros((len(df), 4, 4), dtype=float)
+    u = np.zeros((len(df), 4, 4), dtype=complex)
+    has_complex_columns = all(
+        f"U_solver_re_{r + 1}{c + 1}" in df.columns and f"U_solver_im_{r + 1}{c + 1}" in df.columns
+        for r in range(4)
+        for c in range(4)
+    )
     for r in range(4):
         for c in range(4):
-            u[:, r, c] = df[f"U_solver_{r + 1}{c + 1}"].to_numpy(dtype=float)
+            if has_complex_columns:
+                re = df[f"U_solver_re_{r + 1}{c + 1}"].to_numpy(dtype=float)
+                im = df[f"U_solver_im_{r + 1}{c + 1}"].to_numpy(dtype=float)
+                u[:, r, c] = re + 1j * im
+            else:
+                u[:, r, c] = df[f"U_solver_{r + 1}{c + 1}"].to_numpy(dtype=float)
     return u
 
 
@@ -244,15 +270,23 @@ def probability_c_like(
     energy: float,
     baseline_km: float,
     n_states: int,
+    antineutrino: bool = False,
 ) -> np.ndarray:
     p = np.ones(u.shape[0], dtype=float) if alpha == beta else np.zeros(u.shape[0], dtype=float)
+    im_sign = -1.0 if antineutrino else 1.0
     for i in range(n_states):
         mi2 = masses[:, i]
         for j in range(i + 1, n_states):
             mj2 = masses[:, j]
             phase = PHASE_COEFF * (mj2 - mi2) * baseline_km / energy
-            a = u[:, alpha, i] * u[:, beta, i] * u[:, alpha, j] * u[:, beta, j]
+            a = (
+                u[:, alpha, i]
+                * np.conjugate(u[:, beta, i])
+                * np.conjugate(u[:, alpha, j])
+                * u[:, beta, j]
+            )
             p -= 4.0 * np.real(a) * np.sin(phase) ** 2
+            p += im_sign * 2.0 * np.imag(a) * np.sin(2.0 * phase)
     return np.clip(p, 0.0, 1.0)
 
 
@@ -268,9 +302,10 @@ def source_averaged_probability(
 ) -> np.ndarray:
     z_values, weights = source_weights(profile, flavor, energy)
     out = np.zeros(u.shape[0], dtype=float)
+    antineutrino = flavor.endswith("bar")
     for z_m, weight in zip(z_values, weights):
         baseline_km = max(0.0, BASELINE_KM - z_m * 1.0e-3)
-        out += weight * probability_c_like(u, masses, alpha, beta, energy, baseline_km, n_states)
+        out += weight * probability_c_like(u, masses, alpha, beta, energy, baseline_km, n_states, antineutrino)
     return out
 
 
@@ -315,13 +350,18 @@ def draw_probability_amplitude_scaling(df: pd.DataFrame, out_path: Path) -> None
         x = df[x_col].to_numpy(dtype=float)
         y = df[f"{panel}_max_abs_percent"].to_numpy(dtype=float)
         valid = np.isfinite(x) & np.isfinite(y) & (x > 0.0) & (y > 0.0)
-        ax.scatter(x[valid], y[valid], s=13, alpha=0.42, color="tab:blue", edgecolors="none")
-        ax.set_xscale("log")
-        ax.set_yscale("log")
         ax.set_title(LABELS[panel], fontsize=11, fontweight="bold")
         ax.set_xlabel(r"$\max_E |\Delta \bar{P}_{\alpha\beta}^{dk2nu}(E)|$")
         ax.set_ylabel(r"$\max_E |\Delta N/N|$ [%]")
         ax.grid(alpha=0.25, which="both")
+
+        if np.count_nonzero(valid) == 0:
+            ax.text(0.5, 0.5, "no positive values", ha="center", va="center", transform=ax.transAxes)
+            continue
+
+        ax.scatter(x[valid], y[valid], s=13, alpha=0.42, color="tab:blue", edgecolors="none")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
 
         if np.count_nonzero(valid) > 2:
             lx = np.log10(x[valid])
@@ -352,7 +392,7 @@ def draw_probability_amplitude_scaling(df: pd.DataFrame, out_path: Path) -> None
                 ax.scatter(10.0 ** fit_bin_centers, 10.0 ** fit_bin_medians, s=28, color="black", marker="x", linewidths=1.0, zorder=4)
             ax.legend(frameon=False, fontsize=8, loc="lower right")
 
-    fig.suptitle("DUNE ND 6.5 yr/mode - max event-ratio deviation vs dk2nu-averaged probability amplitude", fontsize=13, fontweight="bold")
+    fig.suptitle("DUNE ND 6.5 yr/mode - ISS(2,3)", fontsize=13, fontweight="bold")
     fig.subplots_adjust(hspace=0.35, wspace=0.22)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=240, bbox_inches="tight")
@@ -360,17 +400,29 @@ def draw_probability_amplitude_scaling(df: pd.DataFrame, out_path: Path) -> None
 
 
 def main() -> None:
-    df = load_merged_table(POINTS_CSV, SUMMARY_CSV)
+    parser = argparse.ArgumentParser(description="Draw ISS(2,3) DUNE ND scan-map figures from a summary CSV.")
+    parser.add_argument("--points-csv", type=Path, default=POINTS_CSV)
+    parser.add_argument("--summary-csv", type=Path, default=SUMMARY_CSV)
+    parser.add_argument("--out-dir", type=Path, default=ROOT / "figures" / "dune_nd" / "iss23" / "scan_maps")
+    parser.add_argument("--x-log", action="store_true", help="Use a logarithmic x-axis for dm41 scan maps.")
+    args = parser.parse_args()
+
+    out_theta24 = args.out_dir / "iss23_scan_map_theta24.png"
+    out_mixing = args.out_dir / "iss23_scan_map_mixing_observables.png"
+    out_amplitude = args.out_dir / "iss23_max_event_ratio_vs_expected_amplitude.png"
+    out_prob_amplitude = args.out_dir / "iss23_max_event_ratio_vs_dk2nu_probability_amplitude.png"
+
+    df = load_merged_table(args.points_csv, args.summary_csv)
     df = add_dk2nu_probability_amplitudes(df)
-    draw_figure(df, OUT_THETA24, mode="theta24")
-    draw_figure(df, OUT_MIXING, mode="mixing")
-    draw_amplitude_scaling(df, OUT_AMPLITUDE)
-    draw_probability_amplitude_scaling(df, OUT_PROB_AMPLITUDE)
+    draw_figure(df, out_theta24, mode="theta24", x_log=args.x_log)
+    draw_figure(df, out_mixing, mode="mixing", x_log=args.x_log)
+    draw_amplitude_scaling(df, out_amplitude)
+    draw_probability_amplitude_scaling(df, out_prob_amplitude)
     print(f"Points utilises: {len(df)}")
-    print(f"Figure theta24: {OUT_THETA24}")
-    print(f"Figure mixing observables: {OUT_MIXING}")
-    print(f"Figure amplitude scaling: {OUT_AMPLITUDE}")
-    print(f"Figure dk2nu probability amplitude scaling: {OUT_PROB_AMPLITUDE}")
+    print(f"Figure theta24: {out_theta24}")
+    print(f"Figure mixing observables: {out_mixing}")
+    print(f"Figure amplitude scaling: {out_amplitude}")
+    print(f"Figure dk2nu probability amplitude scaling: {out_prob_amplitude}")
 
 
 if __name__ == "__main__":

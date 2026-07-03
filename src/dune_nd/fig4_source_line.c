@@ -6,6 +6,7 @@
 #include "dune/xsec.h"
 #include "dune/oscillation.h"
 #include "dune/theory.h"
+#include "dune_sensitivity/baseline_effects.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -147,13 +148,18 @@ static double probability_iss23(
     if (source->model == ND_SOURCE_DK2NU && source->dk2nu && source->dk2nu->rows) {
         double weighted = 0.0;
         double denom = 0.0;
-        for (int i = 0; i < source->dk2nu->n_rows; ++i) {
+        int first_row = 0;
+        int n_rows = 0;
+        if (!dune_dk2nu_flux_z_find_energy_bin(source->dk2nu,
+                                               initial,
+                                               energy_GeV,
+                                               &first_row,
+                                               &n_rows,
+                                               &denom)) {
+            denom = 0.0;
+        }
+        for (int i = first_row; i < first_row + n_rows; ++i) {
             const DuneDk2nuFluxZRow *row = &source->dk2nu->rows[i];
-            if (row->flavor != initial ||
-                energy_GeV < row->e_low_GeV ||
-                energy_GeV >= row->e_high_GeV) {
-                continue;
-            }
             const double z_m = 0.5 * (row->z_low_m + row->z_high_m);
             double baseline_km = source->detector_baseline_km - z_m * 1.0e-3;
             if (baseline_km < 0.0) {
@@ -164,7 +170,6 @@ static double probability_iss23(
                 p = probability_no_sterile(alpha, beta);
             }
             weighted += row->weight * clamp_probability(p);
-            denom += row->weight;
         }
         if (denom > 0.0) {
             return weighted / denom;
@@ -224,6 +229,25 @@ static int eval_xsec(const DuneXsecTable *table, DuneFluxFlavor flavor, double e
     return 0;
 }
 
+
+static double source_flux_value(
+    const DuneFluxTable *flux_table,
+    const NdSourceAverage *source,
+    DuneFluxFlavor flavor,
+    double energy_GeV) {
+    if (source && source->model == ND_SOURCE_DK2NU && source->dk2nu && source->dk2nu->rows) {
+        const double dk2nu_flux = dune_dk2nu_flux_z_weight_sum(source->dk2nu, flavor, energy_GeV);
+        if (dk2nu_flux > 0.0) {
+            return dk2nu_flux;
+        }
+    }
+    double flux = 0.0;
+    if (eval_flux(flux_table, flavor, energy_GeV, &flux) != 0) {
+        return 0.0;
+    }
+    return flux;
+}
+
 static double cc_rate(
     const DuneFluxTable *flux_table,
     const DuneXsecTable *cc_table,
@@ -236,10 +260,9 @@ static double cc_rate(
     const NdSourceAverage *source,
     double width_GeV,
     int use_oscillation) {
-    double flux = 0.0;
+    const double flux = source_flux_value(flux_table, source, initial, energy_GeV);
     double xsec = 0.0;
-    if (eval_flux(flux_table, initial, energy_GeV, &flux) != 0 ||
-        eval_xsec(cc_table, final_flavor, energy_GeV, &xsec) != 0) {
+    if (flux <= 0.0 || eval_xsec(cc_table, final_flavor, energy_GeV, &xsec) != 0) {
         return 0.0;
     }
     const double p = use_oscillation
@@ -258,10 +281,9 @@ static double nc_rate_for_initial(
     const NdSourceAverage *source,
     double width_GeV,
     int use_oscillation) {
-    double flux = 0.0;
+    const double flux = source_flux_value(flux_table, source, initial, energy_GeV);
     double xsec = 0.0;
-    if (eval_flux(flux_table, initial, energy_GeV, &flux) != 0 ||
-        eval_xsec(nc_table, initial, energy_GeV, &xsec) != 0) {
+    if (flux <= 0.0 || eval_xsec(nc_table, initial, energy_GeV, &xsec) != 0) {
         return 0.0;
     }
     const double p_active = use_oscillation ? active_probability_iss23(point, initial, alpha, energy_GeV, source) : 1.0;
@@ -634,5 +656,200 @@ int run_dune_nd_fig4_source_line(const SimulationConfig *cfg) {
             cfg->dune_spectrum_pred_csv);
     dune_dk2nu_flux_z_free(&fhc_dk2nu);
     dune_dk2nu_flux_z_free(&rhc_dk2nu);
+    return 0;
+}
+
+int dune_nd_fig4_build_sensitivity_rows(
+    const SimulationConfig *cfg,
+    const DuneTheoryPoint *asimov,
+    const DuneTheoryPoint *test,
+    DuneSensitivitySpectrumBin *out_rows,
+    int max_rows,
+    int *out_count) {
+    if (!cfg || !asimov || !test || !out_rows || !out_count || max_rows <= 0) {
+        return 1;
+    }
+    *out_count = 0;
+
+    SimulationConfig local_cfg = *cfg;
+    if (cfg->sensitivity_source_model[0] != '\0') {
+        strncpy(local_cfg.dune_source_model, cfg->sensitivity_source_model, sizeof(local_cfg.dune_source_model) - 1);
+        local_cfg.dune_source_model[sizeof(local_cfg.dune_source_model) - 1] = '\0';
+    }
+    if (cfg->sensitivity_nd_dk2nu_flux_z_fhc_file[0] != '\0') {
+        strncpy(local_cfg.dune_dk2nu_flux_z_fhc_file,
+                cfg->sensitivity_nd_dk2nu_flux_z_fhc_file,
+                sizeof(local_cfg.dune_dk2nu_flux_z_fhc_file) - 1);
+        local_cfg.dune_dk2nu_flux_z_fhc_file[sizeof(local_cfg.dune_dk2nu_flux_z_fhc_file) - 1] = '\0';
+    }
+    if (cfg->sensitivity_nd_dk2nu_flux_z_rhc_file[0] != '\0') {
+        strncpy(local_cfg.dune_dk2nu_flux_z_rhc_file,
+                cfg->sensitivity_nd_dk2nu_flux_z_rhc_file,
+                sizeof(local_cfg.dune_dk2nu_flux_z_rhc_file) - 1);
+        local_cfg.dune_dk2nu_flux_z_rhc_file[sizeof(local_cfg.dune_dk2nu_flux_z_rhc_file) - 1] = '\0';
+    }
+
+    static DuneFluxTable fhc_flux;
+    static DuneFluxTable rhc_flux;
+    static DuneXsecTable cc_table;
+    static DuneXsecTable nc_table;
+    static int common_loaded = 0;
+    static char loaded_fhc[256] = "";
+    static char loaded_rhc[256] = "";
+    static char loaded_cc[256] = "";
+    static char loaded_nc[256] = "";
+    if (!common_loaded ||
+        strcmp(loaded_fhc, local_cfg.dune_flux_fhc_file) != 0 ||
+        strcmp(loaded_rhc, local_cfg.dune_flux_rhc_file) != 0 ||
+        strcmp(loaded_cc, local_cfg.dune_xsec_cc_file) != 0 ||
+        strcmp(loaded_nc, local_cfg.dune_xsec_nc_file) != 0) {
+        if (dune_flux_table_load_globes(local_cfg.dune_flux_fhc_file, &fhc_flux) != DUNE_STATUS_OK ||
+            dune_flux_table_load_globes(local_cfg.dune_flux_rhc_file, &rhc_flux) != DUNE_STATUS_OK ||
+            dune_xsec_table_load_globes(local_cfg.dune_xsec_cc_file, &cc_table) != DUNE_STATUS_OK ||
+            dune_xsec_table_load_globes(local_cfg.dune_xsec_nc_file, &nc_table) != DUNE_STATUS_OK) {
+            fprintf(stderr, "DUNE sensitivity ND: impossible de charger flux/xsec\n");
+            return 1;
+        }
+        strncpy(loaded_fhc, local_cfg.dune_flux_fhc_file, sizeof(loaded_fhc) - 1);
+        strncpy(loaded_rhc, local_cfg.dune_flux_rhc_file, sizeof(loaded_rhc) - 1);
+        strncpy(loaded_cc, local_cfg.dune_xsec_cc_file, sizeof(loaded_cc) - 1);
+        strncpy(loaded_nc, local_cfg.dune_xsec_nc_file, sizeof(loaded_nc) - 1);
+        common_loaded = 1;
+    }
+
+    const int n_bins = local_cfg.dune_Erec_bins > 0 ? local_cfg.dune_Erec_bins : 30;
+    const double e_min = local_cfg.dune_Erec_min_GeV > 0.0 ? local_cfg.dune_Erec_min_GeV : 0.5;
+    const double e_max = local_cfg.dune_Erec_max_GeV > e_min ? local_cfg.dune_Erec_max_GeV : 8.0;
+    const double width = (e_max - e_min) / (double)n_bins;
+    const double detector_baseline_km = local_cfg.dune_detector_distance_m > 0.0 ? local_cfg.dune_detector_distance_m * 1.0e-3 : local_cfg.baseline_km;
+    const double source_z_start_m = local_cfg.dune_source_z_start_m > 0.0 ? local_cfg.dune_source_z_start_m : 0.0;
+    const double decay_pipe_length_m = local_cfg.dune_decay_pipe_length_m > 0.0 ? local_cfg.dune_decay_pipe_length_m : 194.0;
+    const int source_z_bins = local_cfg.dune_source_z_bins > 1 ? local_cfg.dune_source_z_bins : 80;
+    NdSourceModel source_model = parse_source_model(local_cfg.dune_source_model);
+    if (n_bins <= 0 || width <= 0.0 || detector_baseline_km <= 0.0 || decay_pipe_length_m <= 0.0) {
+        return 1;
+    }
+
+    static DuneDk2nuFluxZTable fhc_dk2nu;
+    static DuneDk2nuFluxZTable rhc_dk2nu;
+    static int dk2nu_loaded = 0;
+    static char loaded_dk2nu_fhc[256] = "";
+    static char loaded_dk2nu_rhc[256] = "";
+    int have_dk2nu = 0;
+    if (source_model == ND_SOURCE_DK2NU) {
+        if (!dk2nu_loaded ||
+            strcmp(loaded_dk2nu_fhc, local_cfg.dune_dk2nu_flux_z_fhc_file) != 0 ||
+            strcmp(loaded_dk2nu_rhc, local_cfg.dune_dk2nu_flux_z_rhc_file) != 0) {
+            if (dk2nu_loaded) {
+                dune_dk2nu_flux_z_free(&fhc_dk2nu);
+                dune_dk2nu_flux_z_free(&rhc_dk2nu);
+                dk2nu_loaded = 0;
+            }
+            const DuneStatus fhc_status = dune_dk2nu_flux_z_load_csv(local_cfg.dune_dk2nu_flux_z_fhc_file, &fhc_dk2nu);
+            const DuneStatus rhc_status = dune_dk2nu_flux_z_load_csv(local_cfg.dune_dk2nu_flux_z_rhc_file, &rhc_dk2nu);
+            if (fhc_status == DUNE_STATUS_OK && rhc_status == DUNE_STATUS_OK) {
+                strncpy(loaded_dk2nu_fhc, local_cfg.dune_dk2nu_flux_z_fhc_file, sizeof(loaded_dk2nu_fhc) - 1);
+                strncpy(loaded_dk2nu_rhc, local_cfg.dune_dk2nu_flux_z_rhc_file, sizeof(loaded_dk2nu_rhc) - 1);
+                dk2nu_loaded = 1;
+            }
+        }
+        if (dk2nu_loaded) {
+            have_dk2nu = 1;
+        } else {
+            fprintf(stderr,
+                    "DUNE sensitivity ND: source dk2nu indisponible, fallback uniforme "
+                    "(FHC='%s', RHC='%s')\n",
+                    local_cfg.dune_dk2nu_flux_z_fhc_file,
+                    local_cfg.dune_dk2nu_flux_z_rhc_file);
+            dune_dk2nu_flux_z_free(&fhc_dk2nu);
+            dune_dk2nu_flux_z_free(&rhc_dk2nu);
+            source_model = ND_SOURCE_UNIFORM;
+        }
+    }
+
+    const char *panels[] = {"FHC_app", "RHC_app", "FHC_dis", "RHC_dis"};
+    const char *app_components[] = {"nc", "numu", "beam", "signal"};
+    const char *dis_components[] = {"nc", "wrong_mu", "tau", "signal"};
+    const double exposure_pot = ND_POT_PER_YEAR * ND_EXPOSURE_YEARS;
+    const double target_nucleons = ND_TARGET_MASS_KT * 1.0e9 * ND_AVOGADRO;
+    const double event_scale = exposure_pot * target_nucleons;
+
+    static double asimov_cache[DUNE_SENSITIVITY_MAX_BINS];
+    static int asimov_cache_count = 0;
+    static int asimov_cache_valid = 0;
+    static char asimov_cache_key[1024] = "";
+    char current_asimov_key[1024];
+    snprintf(current_asimov_key,
+             sizeof(current_asimov_key),
+             "ND|%s|%d|%.12g|%.12g|%.12g|%.12g|%.12g|%d|%s|%s|%.12g|%.12g|%.12g|%.12g",
+             local_cfg.sensitivity_asimov_mode,
+             n_bins,
+             e_min,
+             e_max,
+             detector_baseline_km,
+             source_z_start_m,
+             decay_pipe_length_m,
+             source_z_bins,
+             local_cfg.dune_dk2nu_flux_z_fhc_file,
+             local_cfg.dune_dk2nu_flux_z_rhc_file,
+             asimov->dm21_eV2,
+             asimov->dm31_eV2,
+             asimov->dm41_eV2,
+             creal(asimov->mixing[0][2]));
+    const int can_cache_asimov = strcmp(local_cfg.sensitivity_asimov_mode, "standard3nu") == 0;
+    const int asimov_cache_hit =
+        can_cache_asimov && asimov_cache_valid && strcmp(asimov_cache_key, current_asimov_key) == 0;
+    int asimov_cache_index = 0;
+    if (can_cache_asimov && !asimov_cache_hit) {
+        asimov_cache_count = 0;
+        asimov_cache_valid = 0;
+    }
+
+    for (int p = 0; p < 4; ++p) {
+        const int is_rhc = strncmp(panels[p], "RHC", 3) == 0;
+        const int is_app = strstr(panels[p], "_app") != NULL;
+        const DuneFluxTable *flux = is_rhc ? &rhc_flux : &fhc_flux;
+        NdSourceAverage source;
+        memset(&source, 0, sizeof(source));
+        source.model = source_model;
+        source.detector_baseline_km = detector_baseline_km;
+        source.source_z_start_m = source_z_start_m;
+        source.decay_pipe_length_m = decay_pipe_length_m;
+        source.source_z_bins = source_z_bins;
+        source.dk2nu = (source_model == ND_SOURCE_DK2NU && have_dk2nu) ? (is_rhc ? &rhc_dk2nu : &fhc_dk2nu) : NULL;
+        const char **components = is_app ? app_components : dis_components;
+        for (int b = 0; b < n_bins; ++b) {
+            const double energy = e_min + ((double)b + 0.5) * width;
+            for (int c = 0; c < 4; ++c) {
+                if (*out_count >= max_rows) {
+                    return 2;
+                }
+                DuneSensitivitySpectrumBin *row = &out_rows[(*out_count)++];
+                memset(row, 0, sizeof(*row));
+                strncpy(row->detector, "ND", sizeof(row->detector) - 1);
+                strncpy(row->panel, panels[p], sizeof(row->panel) - 1);
+                strncpy(row->component, components[c], sizeof(row->component) - 1);
+                row->e_rec_GeV = energy;
+                if (asimov_cache_hit && asimov_cache_index < asimov_cache_count) {
+                    row->asimov_events = asimov_cache[asimov_cache_index];
+                } else {
+                    row->asimov_events = event_scale * component_rate(flux, &cc_table, &nc_table, asimov, panels[p], components[c], energy, &source, width, 1);
+                    if (can_cache_asimov && asimov_cache_index < DUNE_SENSITIVITY_MAX_BINS) {
+                        asimov_cache[asimov_cache_index] = row->asimov_events;
+                    }
+                }
+                ++asimov_cache_index;
+                row->test_events = event_scale * component_rate(flux, &cc_table, &nc_table, test, panels[p], components[c], energy, &source, width, 1);
+            }
+        }
+    }
+
+    if (can_cache_asimov && !asimov_cache_hit) {
+        asimov_cache_count = asimov_cache_index;
+        strncpy(asimov_cache_key, current_asimov_key, sizeof(asimov_cache_key) - 1);
+        asimov_cache_key[sizeof(asimov_cache_key) - 1] = '\0';
+        asimov_cache_valid = 1;
+    }
+
     return 0;
 }

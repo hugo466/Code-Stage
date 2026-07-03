@@ -24,6 +24,12 @@ DEFAULT_OUT = Path("figures/dune_fd/flux/fd_globes_vs_dk2nu_fluxes_linear.png")
 DEFAULT_LOG_OUT = Path("figures/dune_fd/flux/fd_globes_vs_dk2nu_fluxes_log.png")
 DEFAULT_EXPOSURE_POT = 1.1e21
 
+FIGSIZE = (13, 8)
+TITLE_FONTSIZE = 15
+LABEL_FONTSIZE = 14
+TICK_FONTSIZE = 12
+LEGEND_FONTSIZE = 11
+
 FLUX_COLUMNS = [
     "E_GeV",
     "nue",
@@ -123,15 +129,15 @@ def plot_fluxes(
     fig, axes = plt.subplots(
         2,
         2,
-        figsize=(13, 7),
+        figsize=FIGSIZE,
         sharex="col",
         constrained_layout=True,
         gridspec_kw={"height_ratios": [3.0, 1.0], "hspace": 0.05},
     )
 
     for ax, ax_res, title, globes, dk2nu in (
-        (axes[0, 0], axes[1, 0], "FHC", fhc, dk2nu_fhc),
-        (axes[0, 1], axes[1, 1], "RHC", rhc, dk2nu_rhc),
+        (axes[0, 0], axes[1, 0], "FD FHC", fhc, dk2nu_fhc),
+        (axes[0, 1], axes[1, 1], "FD RHC", rhc, dk2nu_rhc),
     ):
         flavor_handles = []
         for column, label in PLOT_SPECS:
@@ -160,14 +166,16 @@ def plot_fluxes(
 
         if log_scale:
             ax.set_yscale("log")
-        ax.set_title(f"FD unoscillated fluxes - {title}")
+        ax.set_title(title, fontsize=TITLE_FONTSIZE)
         ax.set_xlim(0.0, emax_gev)
         ax.grid(alpha=0.3)
+        ax.tick_params(labelsize=TICK_FONTSIZE)
         ax_res.axhline(0.0, color="0.25", linewidth=0.8)
         ax_res.set_xlim(0.0, emax_gev)
-        ax_res.set_xlabel(r"$E_\nu$ [GeV]")
-        ax_res.set_ylabel(r"$\Delta\Phi/\Phi$")
+        ax_res.set_xlabel(r"$E_\nu$ [GeV]", fontsize=LABEL_FONTSIZE)
+        ax_res.set_ylabel(r"$\Delta\Phi/\Phi$", fontsize=LABEL_FONTSIZE)
         ax_res.grid(alpha=0.3)
+        ax_res.tick_params(labelsize=TICK_FONTSIZE)
         style_handles = [
             Line2D([0], [0], color="black", linewidth=1.8, label="FD GLoBES"),
             Line2D(
@@ -181,14 +189,15 @@ def plot_fluxes(
         ]
         ax.legend(
             handles=[*flavor_handles, *style_handles],
-            fontsize=8,
+            fontsize=LEGEND_FONTSIZE,
             ncol=2,
             frameon=False,
         )
 
     axes[0, 0].set_ylabel(
         rf"$\nu\,m^{{-2}}\,GeV^{{-1}}$ for "
-        rf"${exposure_pot:.1e}\ \mathrm{{POT}}$"
+        rf"${exposure_pot:.1e}\ \mathrm{{POT}}$",
+        fontsize=LABEL_FONTSIZE,
     )
     axes[1, 0].set_ylim(
         min(axes[1, 0].get_ylim()[0], axes[1, 1].get_ylim()[0]),
